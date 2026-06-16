@@ -42,6 +42,3 @@ next-env.d.ts
 
 # large files
 *.zip
-
-# prisma generated client
-/generated
