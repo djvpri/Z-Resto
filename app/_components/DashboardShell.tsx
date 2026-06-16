@@ -16,6 +16,7 @@ const NAV = [
   { href: "/reports", label: "Laporan", emoji: "📊", roles: ["OWNER", "MANAGER"] },
   { href: "/overview", label: "HQ Dashboard", emoji: "🏢", roles: ["OWNER"] },
   { href: "/branches", label: "Kelola Cabang", emoji: "🏬", roles: ["OWNER"] },
+  { href: "/subscription", label: "Langganan", emoji: "💳", roles: ["OWNER"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -24,7 +25,15 @@ const ROLE_LABEL: Record<string, string> = {
   CASHIER: "Kasir",
 };
 
-export default function DashboardShell({ user, children }: { user: User; children: React.ReactNode }) {
+export default function DashboardShell({
+  user,
+  children,
+  subscriptionBanner,
+}: {
+  user: User;
+  children: React.ReactNode;
+  subscriptionBanner?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -85,7 +94,21 @@ export default function DashboardShell({ user, children }: { user: User; childre
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Subscription banner */}
+        {subscriptionBanner && (
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-2.5 flex items-center justify-between shrink-0">
+            <span className="text-sm text-amber-700">{subscriptionBanner}</span>
+            <Link
+              href="/subscription"
+              className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline ml-4 shrink-0"
+            >
+              Perpanjang →
+            </Link>
+          </div>
+        )}
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }

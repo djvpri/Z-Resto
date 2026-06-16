@@ -11,17 +11,18 @@ datasource db {
 // =====================
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logoUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  logoUrl       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  branches  Branch[]
-  users     User[]
-  menuItems MenuItem[]
-  categories Category[]
+  branches      Branch[]
+  users         User[]
+  menuItems     MenuItem[]
+  categories    Category[]
+  subscriptions Subscription[]
 }
 
 model Branch {
@@ -50,6 +51,7 @@ model Branch {
 // =====================
 
 enum UserRole {
+  SUPERADMIN  // Admin SaaS - kelola semua tenant
   OWNER       // HQ - akses semua cabang
   MANAGER     // Manajer cabang
   CASHIER     // Kasir cabang
@@ -88,6 +90,44 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
+}
+
+// =====================
+// SUBSCRIPTION / MEMBERSHIP
+// =====================
+
+enum SubscriptionPlan {
+  TRIAL
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING    // Menunggu konfirmasi bayar
+  EXPIRED
+  CANCELLED
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  tenantId     String
+  plan         SubscriptionPlan
+  status       SubscriptionStatus @default(PENDING)
+  amount       Int                // dalam Rupiah (termasuk kode unik)
+  paymentCode  String?            // kode unik 3 digit di akhir
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?            // catatan dari tenant (nama pengirim transfer, dll)
+  confirmedAt  DateTime?
+  confirmedBy  String?            // email admin yang konfirmasi
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
 }
 
 // =====================
@@ -159,11 +199,11 @@ model DiningTable {
 // =====================
 
 enum OrderStatus {
-  PENDING     // Baru dibuat
-  CONFIRMED   // Dikonfirmasi dapur
-  READY       // Siap disajikan
-  COMPLETED   // Sudah bayar
-  CANCELLED   // Dibatalkan
+  PENDING
+  CONFIRMED
+  READY
+  COMPLETED
+  CANCELLED
 }
 
 enum PaymentMethod {
@@ -178,7 +218,7 @@ model Order {
   branchId      String
   cashierId     String
   tableId       String?
-  orderNumber   String        // e.g. "BDW-20240616-001"
+  orderNumber   String
   status        OrderStatus   @default(PENDING)
   subtotal      Int           @default(0)
   taxAmount     Int           @default(0)
@@ -206,7 +246,7 @@ model OrderItem {
   orderId    String
   menuItemId String
   quantity   Int
-  unitPrice  Int      // snapshot harga saat order
+  unitPrice  Int
   subtotal   Int
   notes      String?
 
@@ -225,9 +265,9 @@ model InventoryItem {
   branchId     String
   menuItemId   String?
   name         String
-  unit         String   // "porsi", "kg", "liter", "pcs"
+  unit         String
   currentStock Int      @default(0)
-  minStock     Int      @default(5)  // alert threshold
+  minStock     Int      @default(5)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

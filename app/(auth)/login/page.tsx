@@ -24,7 +24,10 @@ export default function LoginPage() {
         setError(data.error || "Login gagal");
         return;
       }
-      router.push(data.user.role === "OWNER" ? "/overview" : "/pos");
+      const role = data.user.role;
+      if (role === "SUPERADMIN") router.push("/admin/tenants");
+      else if (role === "OWNER") router.push("/overview");
+      else router.push("/pos");
       router.refresh();
     } finally {
       setLoading(false);

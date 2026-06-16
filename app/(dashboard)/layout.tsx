@@ -1,10 +1,55 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/auth-server";
+import { prisma } from "@/lib/prisma";
+import { daysUntil } from "@/lib/pricing";
 import DashboardShell from "@/app/_components/DashboardShell";
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+async function getSubscriptionBanner(tenantId: string, role: string): Promise<string | undefined> {
+  if (role === "CASHIER" || role === "MANAGER") return undefined;
+
+  const sub = await prisma.subscription.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!sub) return "⚠️ Akun belum berlangganan.";
+  if (sub.status === "PENDING") return "⏳ Menunggu konfirmasi pembayaran dari admin.";
+  if (sub.status === "EXPIRED" || sub.status === "CANCELLED") return "⚠️ Langganan Anda telah berakhir.";
+  if (sub.status === "ACTIVE" && sub.endDate) {
+    const days = daysUntil(sub.endDate);
+    if (days < 0) return "⚠️ Langganan Anda telah berakhir.";
+    if (days <= 7) return `⚠️ Langganan berakhir dalam ${days} hari.`;
+  }
+  return undefined;
+}
+
+async function hasActiveSubscription(tenantId: string): Promise<boolean> {
+  const sub = await prisma.subscription.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!sub) return false;
+  if (sub.status === "PENDING") return true; // allow access while waiting for confirmation
+  if (sub.status !== "ACTIVE") return false;
+  if (!sub.endDate) return true;
+  return daysUntil(sub.endDate) >= 0;
+}
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const user = await getServerSession();
   if (!user) redirect("/login");
+  if (user.role === "SUPERADMIN") redirect("/admin/tenants");
+
+  // Subscription gate (bypass for /subscription page itself)
+  const active = await hasActiveSubscription(user.tenantId);
+  if (!active) redirect("/subscription");
+
+  const banner = await getSubscriptionBanner(user.tenantId, user.role);
 
   return (
     <DashboardShell
@@ -12,8 +57,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         id: user.id,
         name: user.name,
         role: user.role,
-        branch: user.branch ? { id: user.branch.id, name: user.branch.name, city: user.branch.city } : null,
+        branch: user.branch
+          ? { id: user.branch.id, name: user.branch.name, city: user.branch.city }
+          : null,
       }}
+      subscriptionBanner={banner}
     >
       {children}
     </DashboardShell>
