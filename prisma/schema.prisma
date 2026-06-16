@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================
+// MULTI-TENANT CORE
+// =====================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches  Branch[]
+  users     User[]
+  menuItems MenuItem[]
+  categories Category[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  address   String?
+  city      String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users     User[]
+  orders    Order[]
+  shifts    Shift[]
+  inventory InventoryItem[]
+  tables    DiningTable[]
+
+  @@index([tenantId])
+}
+
+// =====================
+// AUTH & USERS
+// =====================
+
+enum UserRole {
+  OWNER       // HQ - akses semua cabang
+  MANAGER     // Manajer cabang
+  CASHIER     // Kasir cabang
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  branchId     String?
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(CASHIER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  orders       Order[]
+  shifts       Shift[]
+  sessions     Session[]
+
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+// =====================
+// MENU & KATEGORI
+// =====================
+
+model Category {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+
+  @@index([tenantId])
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  categoryId  String?
+  name        String
+  description String?
+  price       Int      // dalam Rupiah (integer, hindari float)
+  imageUrl    String?
+  isAvailable Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  inventory   InventoryItem[]
+
+  @@index([tenantId])
+  @@index([categoryId])
+}
+
+// =====================
+// MEJA
+// =====================
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+}
+
+model DiningTable {
+  id       String      @id @default(cuid())
+  branchId String
+  number   String
+  capacity Int         @default(4)
+  status   TableStatus @default(AVAILABLE)
+
+  branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([branchId, number])
+  @@index([branchId])
+}
+
+// =====================
+// ORDER & TRANSAKSI
+// =====================
+
+enum OrderStatus {
+  PENDING     // Baru dibuat
+  CONFIRMED   // Dikonfirmasi dapur
+  READY       // Siap disajikan
+  COMPLETED   // Sudah bayar
+  CANCELLED   // Dibatalkan
+}
+
+enum PaymentMethod {
+  CASH
+  QRIS
+  TRANSFER
+  CARD
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  branchId      String
+  cashierId     String
+  tableId       String?
+  orderNumber   String        // e.g. "BDW-20240616-001"
+  status        OrderStatus   @default(PENDING)
+  subtotal      Int           @default(0)
+  taxAmount     Int           @default(0)
+  discountAmount Int          @default(0)
+  totalAmount   Int           @default(0)
+  paymentMethod PaymentMethod?
+  paidAt        DateTime?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  cashier       User          @relation(fields: [cashierId], references: [id])
+  table         DiningTable?  @relation(fields: [tableId], references: [id])
+  items         OrderItem[]
+
+  @@index([branchId])
+  @@index([cashierId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  unitPrice  Int      // snapshot harga saat order
+  subtotal   Int
+  notes      String?
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+}
+
+// =====================
+// STOK & INVENTORI
+// =====================
+
+model InventoryItem {
+  id           String   @id @default(cuid())
+  branchId     String
+  menuItemId   String?
+  name         String
+  unit         String   // "porsi", "kg", "liter", "pcs"
+  currentStock Int      @default(0)
+  minStock     Int      @default(5)  // alert threshold
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem? @relation(fields: [menuItemId], references: [id])
+
+  @@index([branchId])
+}
+
+// =====================
+// SHIFT KASIR
+// =====================
+
+model Shift {
+  id           String    @id @default(cuid())
+  branchId     String
+  userId       String
+  openedAt     DateTime  @default(now())
+  closedAt     DateTime?
+  openingCash  Int       @default(0)
+  closingCash  Int?
+  totalSales   Int       @default(0)
+  totalOrders  Int       @default(0)
+  notes        String?
+
+  branch       Branch    @relation(fields: [branchId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([branchId])
+  @@index([userId])
+}
