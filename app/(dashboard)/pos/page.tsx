@@ -27,7 +27,7 @@ export default function POSPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, subtotal, tax, total } =
+  const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
     useCartStore();
 
   useEffect(() => {
@@ -37,6 +37,9 @@ export default function POSPage() {
     fetch("/api/tables")
       .then((r) => r.json())
       .then((d) => setTables(d.tables || []));
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => { if (d.settings?.taxRate !== undefined) setTaxRate(d.settings.taxRate); });
   }, []);
 
   const categories = [
@@ -218,7 +221,7 @@ export default function POSPage() {
               <span>{formatRupiah(subtotal())}</span>
             </div>
             <div className="flex justify-between text-gray-500">
-              <span>PPN 10%</span>
+              <span>PPN {taxRate}%</span>
               <span>{formatRupiah(tax())}</span>
             </div>
             <div className="flex justify-between font-bold text-gray-900 text-base pt-1.5 border-t border-gray-100 mt-1.5">

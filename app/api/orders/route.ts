@@ -32,7 +32,13 @@ export async function POST(req: NextRequest) {
   const subtotal = items.reduce(
     (s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0
   );
-  const taxAmount = Math.round(subtotal * 0.1);
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: { taxRate: true },
+  });
+  const taxRate = (tenant?.taxRate ?? 10) / 100;
+  const taxAmount = Math.round(subtotal * taxRate);
   const totalAmount = subtotal + taxAmount;
 
   const branch = await prisma.branch.findUnique({ where: { id: user.branchId } });

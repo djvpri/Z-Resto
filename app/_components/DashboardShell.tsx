@@ -17,6 +17,7 @@ const NAV = [
   { href: "/staff", label: "Kelola Staf", emoji: "👥", roles: ["OWNER", "MANAGER"] },
   { href: "/overview", label: "HQ Dashboard", emoji: "🏢", roles: ["OWNER"] },
   { href: "/branches", label: "Kelola Cabang", emoji: "🏬", roles: ["OWNER"] },
+  { href: "/settings", label: "Pengaturan", emoji: "⚙️", roles: ["OWNER"] },
   { href: "/subscription", label: "Langganan", emoji: "💳", roles: ["OWNER"] },
 ];
 
