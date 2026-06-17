@@ -24,8 +24,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getSession(req);
-  if (!user || !user.branchId)
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { tableId, items, notes, paymentMethod } = await req.json();
 
