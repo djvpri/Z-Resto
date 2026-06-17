@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { getSubscriptionEndDate } from "@/lib/pricing";
+import { sendWelcomeEmail } from "@/lib/email";
 
 function slugify(text: string): string {
   return text
@@ -81,6 +82,15 @@ export async function POST(req: NextRequest) {
       });
 
       return { user: newUser, session: newSession };
+    });
+
+    // Kirim welcome email (non-blocking)
+    const trialEnd = getSubscriptionEndDate("TRIAL");
+    sendWelcomeEmail({
+      to: email,
+      ownerName,
+      restaurantName,
+      trialEndDate: trialEnd,
     });
 
     const response = Response.json(

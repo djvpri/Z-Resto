@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PRICING, getSubscriptionEndDate } from "@/lib/pricing";
+import { sendSubscriptionConfirmedEmail } from "@/lib/email";
 
 export async function POST(
   req: NextRequest,
@@ -47,6 +48,21 @@ export async function POST(
       notes: "Diberi manual oleh SuperAdmin",
     },
   });
+
+  // Kirim email konfirmasi ke owner tenant
+  const owner = await prisma.user.findFirst({
+    where: { tenantId: tenant.id, role: "OWNER" },
+    select: { email: true, name: true },
+  });
+  if (owner) {
+    sendSubscriptionConfirmedEmail({
+      to: owner.email,
+      ownerName: owner.name,
+      restaurantName: tenant.name,
+      plan: plan as string,
+      endDate,
+    });
+  }
 
   return Response.json({ subscription: sub }, { status: 201 });
 }
