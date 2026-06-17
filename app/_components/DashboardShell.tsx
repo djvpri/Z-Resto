@@ -12,6 +12,7 @@ type User = {
 const NAV = [
   { href: "/pos", label: "POS Kasir", emoji: "🛒", roles: ["OWNER", "MANAGER", "CASHIER"] },
   { href: "/orders", label: "Riwayat Order", emoji: "📋", roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/shift", label: "Shift Kasir", emoji: "🕐", roles: ["OWNER", "MANAGER", "CASHIER"] },
   { href: "/menu", label: "Kelola Menu", emoji: "🍽️", roles: ["OWNER", "MANAGER"] },
   { href: "/reports", label: "Laporan", emoji: "📊", roles: ["OWNER", "MANAGER"] },
   { href: "/staff", label: "Kelola Staf", emoji: "👥", roles: ["OWNER", "MANAGER"] },

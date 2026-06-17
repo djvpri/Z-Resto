@@ -25,6 +25,13 @@ type ReceiptItem = {
   subtotal: number;
 };
 
+type ActiveShift = {
+  id: string;
+  openedAt: string;
+  user: { name: string };
+  openingCash: number;
+};
+
 type Receipt = {
   orderNumber: string;
   paidAt: string;
@@ -56,6 +63,10 @@ export default function POSPage() {
   const [error, setError] = useState("");
   const [tenantName, setTenantName] = useState("Z-Resto");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+  const [showOpenShift, setShowOpenShift] = useState(false);
+  const [openingCash, setOpeningCash] = useState("");
+  const [shiftLoading, setShiftLoading] = useState(false);
 
   const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
     useCartStore();
@@ -73,7 +84,26 @@ export default function POSPage() {
         if (d.settings?.taxRate !== undefined) setTaxRate(d.settings.taxRate);
         if (d.settings?.name) setTenantName(d.settings.name);
       });
+    fetch("/api/shifts")
+      .then((r) => r.json())
+      .then((d) => setActiveShift(d.active || null));
   }, []);
+
+  async function openShift() {
+    setShiftLoading(true);
+    const res = await fetch("/api/shifts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ openingCash: Number(openingCash) || 0 }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setActiveShift(d.shift);
+      setShowOpenShift(false);
+      setOpeningCash("");
+    }
+    setShiftLoading(false);
+  }
 
   const categories = [
     "Semua",
@@ -158,7 +188,30 @@ export default function POSPage() {
         }
       `}</style>
 
-      <div className="flex h-full">
+      {/* Shift banner */}
+      {!activeShift ? (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between shrink-0">
+          <span className="text-xs text-amber-700 font-medium">Belum ada shift aktif — buka shift sebelum mulai transaksi</span>
+          <button
+            onClick={() => setShowOpenShift(true)}
+            className="text-xs font-bold text-amber-700 hover:text-amber-900 border border-amber-300 px-3 py-1 rounded-lg hover:bg-amber-100 transition-colors ml-4 shrink-0"
+          >
+            Buka Shift
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center justify-between shrink-0">
+          <span className="text-xs text-emerald-700">
+            Shift aktif · {activeShift.user.name} · sejak{" "}
+            {new Date(activeShift.openedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <a href="/shift" className="text-xs font-semibold text-emerald-700 hover:underline ml-4 shrink-0">
+            Kelola Shift →
+          </a>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
         {/* Left: Menu */}
         <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3">
           {/* Category tabs */}
@@ -458,6 +511,43 @@ export default function POSPage() {
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
               >
                 🖨️ Cetak
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buka Shift Modal */}
+      {showOpenShift && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+            <div className="p-5 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">Buka Shift</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Hitung uang di laci sebelum mulai</p>
+            </div>
+            <div className="p-5">
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Modal Awal (Rp)</label>
+              <input
+                type="number"
+                value={openingCash}
+                onChange={(e) => setOpeningCash(e.target.value)}
+                placeholder="0"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div className="p-5 border-t border-gray-100 flex gap-2">
+              <button
+                onClick={() => setShowOpenShift(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={openShift}
+                disabled={shiftLoading}
+                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {shiftLoading ? "Membuka..." : "Buka Shift"}
               </button>
             </div>
           </div>

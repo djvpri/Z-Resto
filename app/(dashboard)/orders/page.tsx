@@ -14,6 +14,8 @@ type Order = {
   id: string;
   orderNumber: string;
   status: string;
+  subtotal: number;
+  taxAmount: number;
   totalAmount: number;
   paymentMethod: string | null;
   notes: string | null;
@@ -51,21 +53,55 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [userRole, setUserRole] = useState<string>("");
+
+  // void state
+  const [voidReason, setVoidReason] = useState("");
+  const [voidLoading, setVoidLoading] = useState(false);
+  const [voidError, setVoidError] = useState("");
+  const [showVoidConfirm, setShowVoidConfirm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/orders");
-    const d = await res.json();
-    setOrders(d.orders || []);
+    const [ordersRes, meRes] = await Promise.all([
+      fetch("/api/orders"),
+      fetch("/api/auth/me"),
+    ]);
+    const ordersData = await ordersRes.json();
+    const meData = await meRes.json();
+    setOrders(ordersData.orders || []);
+    setUserRole(meData.user?.role || "");
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const filtered =
     statusFilter === "ALL" ? orders : orders.filter((o) => o.status === statusFilter);
+
+  async function voidOrder() {
+    if (!selected) return;
+    setVoidLoading(true);
+    setVoidError("");
+    const res = await fetch(`/api/orders/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "void", reason: voidReason }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setOrders((prev) => prev.map((o) => (o.id === selected.id ? { ...o, ...d.order } : o)));
+      setSelected({ ...selected, status: "CANCELLED" });
+      setShowVoidConfirm(false);
+      setVoidReason("");
+    } else {
+      const d = await res.json();
+      setVoidError(d.error || "Gagal membatalkan order");
+    }
+    setVoidLoading(false);
+  }
+
+  const canVoid = userRole === "OWNER" || userRole === "MANAGER";
 
   return (
     <div className="p-6">
@@ -117,8 +153,15 @@ export default function OrdersPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{order.orderNumber}</td>
+                <tr
+                  key={order.id}
+                  className={`hover:bg-gray-50/50 ${order.status === "CANCELLED" ? "opacity-50" : ""}`}
+                >
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                    {order.status === "CANCELLED" ? (
+                      <span className="line-through">{order.orderNumber}</span>
+                    ) : order.orderNumber}
+                  </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(order.createdAt)}</td>
                   <td className="px-4 py-3 text-gray-700">{order.cashier.name}</td>
                   <td className="px-4 py-3 text-gray-500">
@@ -138,7 +181,7 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => setSelected(order)}
+                      onClick={() => { setSelected(order); setVoidError(""); setShowVoidConfirm(false); }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Detail
@@ -162,7 +205,7 @@ export default function OrdersPage() {
       {selected && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelected(null)}
+          onClick={() => { setSelected(null); setShowVoidConfirm(false); }}
         >
           <div
             className="bg-white rounded-2xl w-full max-w-md shadow-xl"
@@ -170,15 +213,19 @@ export default function OrdersPage() {
           >
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="font-semibold text-gray-900 font-mono text-sm">
+                <h2 className={`font-semibold font-mono text-sm ${selected.status === "CANCELLED" ? "line-through text-gray-400" : "text-gray-900"}`}>
                   {selected.orderNumber}
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">{formatDate(selected.createdAt)}</p>
               </div>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[selected.status] || "bg-gray-100 text-gray-600"}`}>
+                  {STATUS_LABEL[selected.status] || selected.status}
+                </span>
+                <button onClick={() => { setSelected(null); setShowVoidConfirm(false); }} className="text-gray-400 hover:text-gray-600">✕</button>
+              </div>
             </div>
+
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-3 gap-3 text-xs">
                 <div>
@@ -207,9 +254,7 @@ export default function OrdersPage() {
                       <span className="text-gray-700">
                         {item.quantity}× {item.menuItem.name}
                       </span>
-                      <span className="text-gray-900 font-medium">
-                        {formatRupiah(item.subtotal)}
-                      </span>
+                      <span className="text-gray-900 font-medium">{formatRupiah(item.subtotal)}</span>
                     </div>
                   ))}
                 </div>
@@ -218,11 +263,11 @@ export default function OrdersPage() {
               <div className="border-t border-gray-100 pt-3 space-y-1">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Subtotal</span>
-                  <span>{formatRupiah(selected.totalAmount / 1.1)}</span>
+                  <span>{formatRupiah(selected.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>PPN 10%</span>
-                  <span>{formatRupiah(selected.totalAmount - selected.totalAmount / 1.1)}</span>
+                  <span>PPN</span>
+                  <span>{formatRupiah(selected.taxAmount)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
                   <span>Total</span>
@@ -232,7 +277,48 @@ export default function OrdersPage() {
 
               {selected.notes && (
                 <div className="bg-gray-50 rounded-xl px-3 py-2 text-xs text-gray-600">
-                  Catatan: {selected.notes}
+                  {selected.notes}
+                </div>
+              )}
+
+              {/* Void section */}
+              {canVoid && selected.status !== "CANCELLED" && (
+                <div className="border-t border-gray-100 pt-4">
+                  {!showVoidConfirm ? (
+                    <button
+                      onClick={() => setShowVoidConfirm(true)}
+                      className="w-full py-2 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
+                    >
+                      Batalkan / Void Order
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-red-600 font-medium">Konfirmasi pembatalan order ini?</p>
+                      <input
+                        type="text"
+                        value={voidReason}
+                        onChange={(e) => setVoidReason(e.target.value)}
+                        placeholder="Alasan pembatalan (opsional)"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                      {voidError && <p className="text-xs text-red-500">{voidError}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setShowVoidConfirm(false); setVoidReason(""); }}
+                          className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={voidOrder}
+                          disabled={voidLoading}
+                          className="flex-1 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {voidLoading ? "Memproses..." : "Ya, Batalkan"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
