@@ -8,12 +8,34 @@ type MenuItem = {
   name: string;
   description: string | null;
   price: number;
+  imageUrl: string | null;
   isAvailable: boolean;
   isActive: boolean;
   category: Category | null;
 };
 
 const EMPTY_FORM = { name: "", description: "", price: "", categoryId: "", isAvailable: true };
+
+function compressImage(file: File, maxPx = 400, quality = 0.8): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function MenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -25,6 +47,7 @@ export default function MenuPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState("");
   const [catSaving, setCatSaving] = useState(false);
   const [catError, setCatError] = useState("");
@@ -50,6 +73,7 @@ export default function MenuPage() {
   function openAdd() {
     setEditItem(null);
     setForm(EMPTY_FORM);
+    setImagePreview(null);
     setError("");
     setShowModal(true);
   }
@@ -63,8 +87,21 @@ export default function MenuPage() {
       categoryId: item.category?.id || "",
       isAvailable: item.isAvailable,
     });
+    setImagePreview(item.imageUrl || null);
     setError("");
     setShowModal(true);
+  }
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Ukuran foto max 5MB"); return; }
+    try {
+      const compressed = await compressImage(file);
+      setImagePreview(compressed);
+    } catch {
+      setError("Gagal memproses foto");
+    }
   }
 
   async function save() {
@@ -78,6 +115,7 @@ export default function MenuPage() {
         price: parseInt(form.price, 10),
         categoryId: form.categoryId || null,
         isAvailable: form.isAvailable,
+        imageUrl: imagePreview,
       };
       const res = editItem
         ? await fetch(`/api/menu/${editItem.id}`, {
@@ -220,10 +258,19 @@ export default function MenuPage() {
             {filtered.map((item) => (
               <tr key={item.id} className={`hover:bg-gray-50/50 ${!item.isActive ? "opacity-40" : ""}`}>
                 <td className="px-4 py-3">
-                  <div className="font-medium text-gray-900">{item.name}</div>
-                  {item.description && (
-                    <div className="text-xs text-gray-400 truncate max-w-xs">{item.description}</div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-lg object-cover shrink-0 bg-gray-100" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center text-gray-300 text-lg">🍽️</div>
+                    )}
+                    <div>
+                      <div className="font-medium text-gray-900">{item.name}</div>
+                      {item.description && (
+                        <div className="text-xs text-gray-400 truncate max-w-xs">{item.description}</div>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
@@ -398,6 +445,30 @@ export default function MenuPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Foto Menu</label>
+                <div className="flex items-center gap-3">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img src={imagePreview} alt="preview" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+                      <button
+                        type="button"
+                        onClick={() => setImagePreview(null)}
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-red-600"
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-2xl shrink-0">🍽️</div>
+                  )}
+                  <label className="cursor-pointer flex-1">
+                    <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-3 text-center hover:border-emerald-400 transition-colors">
+                      <div className="text-sm text-gray-500">Klik untuk pilih foto</div>
+                      <div className="text-xs text-gray-400 mt-0.5">JPG/PNG, max 5MB — dikompres otomatis</div>
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  </label>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <input
