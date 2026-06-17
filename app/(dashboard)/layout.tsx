@@ -45,6 +45,10 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
   if (user.role === "SUPERADMIN") redirect("/admin/tenants");
 
+  // Tenant suspension check
+  const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } });
+  if (!tenant?.isActive) redirect("/suspended");
+
   // Subscription gate (bypass for /subscription page itself)
   const active = await hasActiveSubscription(user.tenantId);
   if (!active) redirect("/subscription");
