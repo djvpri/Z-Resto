@@ -40,15 +40,20 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create tenant + owner + trial subscription in transaction
+    // Create tenant + branch + owner + trial subscription in transaction
     const { user, session } = await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: { name: restaurantName, slug },
       });
 
+      const branch = await tx.branch.create({
+        data: { tenantId: tenant.id, name: "Cabang Utama" },
+      });
+
       const newUser = await tx.user.create({
         data: {
           tenantId: tenant.id,
+          branchId: branch.id,
           name: ownerName,
           email,
           passwordHash,

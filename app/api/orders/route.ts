@@ -29,6 +29,19 @@ export async function POST(req: NextRequest) {
 
   const { tableId, items, notes, paymentMethod } = await req.json();
 
+  // Owner might not have branchId — fallback to first branch of tenant
+  let branchId: string | null = user.branchId ?? null;
+  if (!branchId) {
+    const firstBranch = await prisma.branch.findFirst({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: "asc" },
+    });
+    branchId = firstBranch?.id ?? null;
+  }
+  if (!branchId) {
+    return Response.json({ error: "Tidak ada cabang. Buat cabang dulu di menu Kelola Cabang." }, { status: 400 });
+  }
+
   const subtotal = items.reduce(
     (s: number, i: { unitPrice: number; quantity: number }) => s + i.unitPrice * i.quantity, 0
   );
@@ -41,12 +54,12 @@ export async function POST(req: NextRequest) {
   const taxAmount = Math.round(subtotal * taxRate);
   const totalAmount = subtotal + taxAmount;
 
-  const branch = await prisma.branch.findUnique({ where: { id: user.branchId } });
+  const branch = await prisma.branch.findUnique({ where: { id: branchId } });
   const orderNumber = generateOrderNumber(branch?.city?.slice(0, 3) || "RST");
 
   const order = await prisma.order.create({
     data: {
-      branchId: user.branchId,
+      branchId,
       cashierId: user.id,
       tableId: tableId || null,
       orderNumber,

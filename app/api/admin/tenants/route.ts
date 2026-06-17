@@ -70,8 +70,11 @@ export async function POST(req: NextRequest) {
 
   const tenant = await prisma.$transaction(async (tx) => {
     const t = await tx.tenant.create({ data: { name, slug } });
+    const branch = await tx.branch.create({
+      data: { tenantId: t.id, name: "Cabang Utama" },
+    });
     await tx.user.create({
-      data: { tenantId: t.id, name: ownerName, email: ownerEmail, passwordHash, role: "OWNER" },
+      data: { tenantId: t.id, branchId: branch.id, name: ownerName, email: ownerEmail, passwordHash, role: "OWNER" },
     });
     await tx.subscription.create({
       data: {
