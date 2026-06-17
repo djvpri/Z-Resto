@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { formatRupiah } from "@/lib/format";
 
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; _count?: { menuItems: number } };
 type MenuItem = {
   id: string;
   name: string;
@@ -20,22 +20,27 @@ export default function MenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [filter, setFilter] = useState("Semua");
   const [showModal, setShowModal] = useState(false);
+  const [showCatModal, setShowCatModal] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [newCatName, setNewCatName] = useState("");
+  const [catSaving, setCatSaving] = useState(false);
+  const [catError, setCatError] = useState("");
+  const [editCat, setEditCat] = useState<{ id: string; name: string } | null>(null);
+
+  async function loadCategories() {
+    const res = await fetch("/api/categories");
+    const d = await res.json();
+    setCategories(d.categories || []);
+  }
 
   async function load() {
     const res = await fetch("/api/menu");
     const d = await res.json();
-    const all: MenuItem[] = d.items || [];
-    setItems(all);
-    const cats = Array.from(
-      new Map(
-        all.filter((i) => i.category).map((i) => [i.category!.id, i.category!])
-      ).values()
-    );
-    setCategories(cats);
+    setItems(d.items || []);
+    await loadCategories();
   }
 
   useEffect(() => {
@@ -97,6 +102,43 @@ export default function MenuPage() {
     }
   }
 
+  async function addCategory() {
+    if (!newCatName.trim()) return;
+    setCatSaving(true); setCatError("");
+    const res = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCatName }),
+    });
+    const d = await res.json();
+    setCatSaving(false);
+    if (!res.ok) { setCatError(d.error || "Gagal menambah kategori"); return; }
+    setNewCatName("");
+    loadCategories();
+  }
+
+  async function saveEditCat() {
+    if (!editCat || !editCat.name.trim()) return;
+    setCatSaving(true); setCatError("");
+    const res = await fetch(`/api/categories/${editCat.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editCat.name }),
+    });
+    const d = await res.json();
+    setCatSaving(false);
+    if (!res.ok) { setCatError(d.error || "Gagal menyimpan"); return; }
+    setEditCat(null);
+    loadCategories();
+  }
+
+  async function deleteCategory(id: string, name: string) {
+    if (!confirm(`Hapus kategori "${name}"? Menu yang ada akan dipindah ke "Tanpa Kategori".`)) return;
+    await fetch(`/api/categories/${id}`, { method: "DELETE" });
+    loadCategories();
+    load();
+  }
+
   async function toggleAvailable(item: MenuItem) {
     await fetch(`/api/menu/${item.id}`, {
       method: "PATCH",
@@ -127,14 +169,22 @@ export default function MenuPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Kelola Menu</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{items.length} item menu</p>
+          <p className="text-sm text-gray-500 mt-0.5">{items.length} item menu · {categories.length} kategori</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors"
-        >
-          + Tambah Menu
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowCatModal(true); setCatError(""); setNewCatName(""); setEditCat(null); }}
+            className="border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            🏷️ Kategori
+          </button>
+          <button
+            onClick={openAdd}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors"
+          >
+            + Tambah Menu
+          </button>
+        </div>
       </div>
 
       {/* Category filter */}
@@ -224,7 +274,74 @@ export default function MenuPage() {
         </table>
       </div>
 
-      {/* Modal */}
+      {/* Kategori Modal */}
+      {showCatModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Kelola Kategori</h2>
+              <button onClick={() => setShowCatModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
+              {/* List */}
+              {categories.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">Belum ada kategori</p>
+              )}
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center gap-2">
+                  {editCat?.id === cat.id ? (
+                    <>
+                      <input
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={editCat.name}
+                        onChange={(e) => setEditCat({ ...editCat, name: e.target.value })}
+                        onKeyDown={(e) => e.key === "Enter" && saveEditCat()}
+                        autoFocus
+                      />
+                      <button onClick={saveEditCat} disabled={catSaving} className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50">
+                        Simpan
+                      </button>
+                      <button onClick={() => setEditCat(null)} className="text-xs text-gray-400 hover:text-gray-600">Batal</button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-800">{cat.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">{cat._count?.menuItems ?? 0} item</span>
+                      </div>
+                      <button onClick={() => setEditCat({ id: cat.id, name: cat.name })} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                      <button onClick={() => deleteCategory(cat.id, cat.name)} className="text-xs text-red-500 hover:text-red-700 font-medium">Hapus</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            {catError && <p className="text-sm text-red-500 px-5">{catError}</p>}
+            {/* Add new */}
+            <div className="p-5 border-t border-gray-100">
+              <p className="text-xs font-medium text-gray-500 mb-2">Tambah Kategori Baru</p>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="cth. Minuman, Makanan Berat..."
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCategory()}
+                />
+                <button
+                  onClick={addCategory}
+                  disabled={catSaving || !newCatName.trim()}
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {catSaving ? "..." : "Tambah"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
