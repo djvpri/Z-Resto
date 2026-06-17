@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 type User = { id: string; name: string; email: string };
 
 const ADMIN_NAV = [
+  { href: "/admin", label: "Overview", emoji: "📊" },
   { href: "/admin/tenants", label: "Daftar Tenant", emoji: "🏢" },
   { href: "/admin/payments", label: "Kelola Pembayaran", emoji: "💳" },
 ];
