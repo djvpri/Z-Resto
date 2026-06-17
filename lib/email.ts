@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import {
   welcomeTemplate,
   subscriptionConfirmedTemplate,
@@ -6,22 +6,29 @@ import {
   subscriptionExpiredTemplate,
 } from "./email-templates";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
-const FROM = process.env.EMAIL_FROM || "Z-Resto <noreply@zresto.id>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://zresto.id";
+const FROM = process.env.EMAIL_FROM || "Z-Resto <noreply@gmail.com>";
+
+function makeTransport() {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS;
+  if (!user || !pass) return null;
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+}
 
 async function send(to: string, subject: string, html: string) {
-  if (!resend) {
-    console.log(`[Email skipped — RESEND_API_KEY not set] To: ${to} | Subject: ${subject}`);
+  const transport = makeTransport();
+  if (!transport) {
+    console.log(`[Email skipped — EMAIL_USER/EMAIL_PASS tidak diset] To: ${to} | ${subject}`);
     return;
   }
   try {
-    await resend.emails.send({ from: FROM, to, subject, html });
+    await transport.sendMail({ from: FROM, to, subject, html });
   } catch (err) {
-    // Email failure should never crash the app
     console.error("[Email error]", err);
   }
 }
