@@ -7,6 +7,7 @@ type MenuItem = {
   id: string;
   name: string;
   price: number;
+  imageUrl: string | null;
   isAvailable: boolean;
   category: { name: string } | null;
 };
@@ -185,9 +186,17 @@ export default function POSPage() {
                 onClick={() => addItem({ menuItemId: item.id, name: item.name, price: item.price })}
                 className="bg-white rounded-xl border border-gray-100 p-3 text-left hover:border-emerald-400 hover:shadow-md active:scale-[0.97] transition-all"
               >
-                <div className="bg-emerald-50 rounded-lg h-14 flex items-center justify-center text-2xl mb-2.5">
-                  🍽️
-                </div>
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="rounded-lg h-14 w-full object-cover mb-2.5"
+                  />
+                ) : (
+                  <div className="bg-emerald-50 rounded-lg h-14 flex items-center justify-center text-2xl mb-2.5">
+                    🍽️
+                  </div>
+                )}
                 <div className="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
                   {item.name}
                 </div>
