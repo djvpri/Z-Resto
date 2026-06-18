@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCartStore } from "@/stores/cart";
 import { formatRupiah } from "@/lib/format";
+import { cachedFetch, invalidateCache } from "@/lib/cached-fetch";
 
 type MenuItem = {
   id: string;
@@ -76,6 +77,7 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [orderNotes, setOrderNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
   const [tenantName, setTenantName] = useState("Z-Resto");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -204,6 +206,7 @@ export default function POSPage() {
   }
 
   function refreshTables() {
+    invalidateCache("/api/tables");
     fetch("/api/tables")
       .then((r) => r.json())
       .then((d) => setTables(d.tables || []));
@@ -314,29 +317,37 @@ export default function POSPage() {
     }
   }
 
-  useEffect(() => {
-    fetch("/api/menu")
-      .then((r) => r.json())
-      .then((d) => setMenuItems(d.items || []));
-    fetch("/api/tables")
-      .then((r) => r.json())
-      .then((d) => setTables(d.tables || []));
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.settings?.taxRate !== undefined) setTaxRate(d.settings.taxRate);
-        if (d.settings?.name) setTenantName(d.settings.name);
-      });
-    fetch("/api/shifts")
-      .then((r) => r.json())
-      .then((d) => setActiveShift(d.active || null));
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
-      .catch(() => {});
+  // Parallel fetch with stale-while-revalidate cache
+  const loadInitialData = useCallback(async () => {
+    try {
+      const [menuRes, tablesRes, settingsRes, shiftsRes, authRes] = await Promise.all([
+        cachedFetch<{ items: MenuItem[] }>("/api/menu", { maxAge: 2 * 60 * 1000 }),
+        cachedFetch<{ tables: DiningTable[] }>("/api/tables", { maxAge: 30_000 }),
+        cachedFetch<{ settings: { taxRate?: number; name?: string } }>("/api/settings", { maxAge: 5 * 60 * 1000 }),
+        cachedFetch<{ active: ActiveShift | null }>("/api/shifts", { maxAge: 10_000 }),
+        cachedFetch<{ user?: { role?: string } }>("/api/auth/me", { maxAge: 5 * 60 * 1000 }),
+      ]);
+
+      setMenuItems(menuRes.items || []);
+      setTables(tablesRes.tables || []);
+      if (settingsRes.settings?.taxRate !== undefined) setTaxRate(settingsRes.settings.taxRate);
+      if (settingsRes.settings?.name) setTenantName(settingsRes.settings.name);
+      setActiveShift(shiftsRes.active || null);
+      if (authRes.user?.role) setUserRole(authRes.user.role);
+    } catch (e) {
+      console.error("Failed to load POS data:", e);
+    } finally {
+      setInitialLoading(false);
+    }
+
+    // Load reservations separately (not critical)
     loadReservations();
     loadActiveOrders();
   }, []);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
   async function openShift() {
     setShiftLoading(true);
@@ -350,6 +361,7 @@ export default function POSPage() {
       setActiveShift(d.shift);
       setShowOpenShift(false);
       setOpeningCash("");
+      invalidateCache("/api/shifts");
     }
     setShiftLoading(false);
   }
@@ -534,7 +546,60 @@ export default function POSPage() {
         }
       `}</style>
 
-      {/* Shift banner */}
+      {/* Loading skeleton */}
+      {initialLoading && (
+        <div className="flex flex-col h-full animate-pulse">
+          <div className="bg-gray-100 border-b border-gray-100 px-4 py-2 shrink-0">
+            <div className="h-3 bg-gray-200 rounded w-48" />
+          </div>
+          <div className="flex border-b border-gray-100 shrink-0">
+            <div className="flex-1 py-2.5 flex justify-center"><div className="h-3 bg-gray-200 rounded w-16" /></div>
+            <div className="flex-1 py-2.5 flex justify-center"><div className="h-3 bg-gray-200 rounded w-16" /></div>
+          </div>
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden p-3 lg:p-4 gap-2 lg:gap-3">
+              <div className="flex gap-1.5 overflow-hidden shrink-0">
+                {[1,2,3,4,5].map(i => <div key={i} className="h-7 bg-gray-200 rounded-full w-16 shrink-0" />)}
+              </div>
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 content-start">
+                {Array.from({length:12}).map((_,i) => (
+                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-2 lg:p-3">
+                    <div className="bg-gray-100 rounded-lg h-12 lg:h-14 mb-2" />
+                    <div className="h-2.5 bg-gray-200 rounded w-3/4 mb-1.5" />
+                    <div className="h-2.5 bg-gray-200 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col shrink-0">
+              <div className="p-4 border-b border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 bg-gray-200 rounded w-20" />
+                </div>
+                <div className="h-10 bg-gray-100 rounded-lg" />
+              </div>
+              <div className="flex-1 p-4 space-y-3">
+                {[1,2,3].map(i => (
+                  <div key={i} className="flex items-start gap-2">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-gray-200 rounded w-3/4" />
+                      <div className="h-2.5 bg-gray-200 rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t border-gray-100 space-y-3">
+                <div className="h-10 bg-gray-200 rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main content (hidden while loading) */}
+      {!initialLoading && (
+        <>
+          {/* Shift banner */}
       {!activeShift ? (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between shrink-0">
           <span className="text-xs text-amber-700 font-medium">Belum ada shift aktif — buka shift sebelum mulai transaksi</span>
@@ -1818,6 +1883,8 @@ export default function POSPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </>
   );
