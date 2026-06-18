@@ -13,6 +13,12 @@ type Shift = {
   totalOrders: number;
   notes: string | null;
   user: ShiftUser;
+  paymentBreakdown?: {
+    CASH: number;
+    QRIS: number;
+    TRANSFER: number;
+    CARD: number;
+  };
 };
 
 function duration(from: string, to: string | null) {
@@ -29,11 +35,26 @@ function fmt(dt: string) {
   });
 }
 
+function fmtDate(dt: string) {
+  return new Date(dt).toLocaleString("id-ID", {
+    day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: "Tunai",
+  QRIS: "QRIS",
+  TRANSFER: "Transfer",
+  CARD: "Kartu",
+};
+
 export default function ShiftPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [active, setActive] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Shift | null>(null);
+  const [showRecap, setShowRecap] = useState<Shift | null>(null);
 
   // buka shift
   const [showOpen, setShowOpen] = useState(false);
@@ -89,8 +110,32 @@ export default function ShiftPage() {
     setCloseLoading(false);
   }
 
+  function handleRecap(shift: Shift) {
+    setShowRecap(shift);
+  }
+
+  function printRecap() {
+    window.print();
+  }
+
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-4 lg:p-6 max-w-3xl">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .recap-print, .recap-print * { visibility: visible !important; }
+          .recap-print {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            padding: 20px !important;
+            background: white !important;
+          }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Shift Kasir</h1>
@@ -128,10 +173,10 @@ export default function ShiftPage() {
             </div>
           </div>
           <button
-            onClick={() => setSelected(active)}
+            onClick={() => handleRecap(active)}
             className="text-xs text-emerald-700 font-semibold hover:underline"
           >
-            Lihat Detail →
+            Lihat Rekap →
           </button>
         </div>
       )}
@@ -141,59 +186,61 @@ export default function ShiftPage() {
         <div className="text-center py-16 text-gray-400 text-sm">Memuat...</div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Kasir</th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Buka</th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">Tutup</th>
-                <th className="text-right px-4 py-3 text-gray-500 font-medium">Order</th>
-                <th className="text-right px-4 py-3 text-gray-500 font-medium">Total Penjualan</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {shifts.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{s.user.name}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{fmt(s.openedAt)}</td>
-                  <td className="px-4 py-3 text-xs">
-                    {s.closedAt ? (
-                      <span className="text-gray-500">{fmt(s.closedAt)}</span>
-                    ) : (
-                      <span className="text-emerald-600 font-semibold">Aktif · {duration(s.openedAt, null)}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-700">{s.totalOrders}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                    {formatRupiah(s.totalSales)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelected(s)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Detail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {shifts.length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">
-                    Belum ada shift
-                  </td>
+                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Kasir</th>
+                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Buka</th>
+                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Tutup</th>
+                  <th className="text-right px-4 py-3 text-gray-500 font-medium">Order</th>
+                  <th className="text-right px-4 py-3 text-gray-500 font-medium">Total</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {shifts.map((s) => (
+                  <tr key={s.id} className="hover:bg-gray-50/50">
+                    <td className="px-4 py-3 font-medium text-gray-800">{s.user.name}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{fmt(s.openedAt)}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {s.closedAt ? (
+                        <span className="text-gray-500">{fmt(s.closedAt)}</span>
+                      ) : (
+                        <span className="text-emerald-600 font-semibold">Aktif · {duration(s.openedAt, null)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-700">{s.totalOrders}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                      {formatRupiah(s.totalSales)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleRecap(s)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Rekap
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {shifts.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-gray-400 text-sm">
+                      Belum ada shift
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Buka Shift Modal */}
       {showOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl">
             <div className="p-5 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900">Buka Shift</h2>
               <p className="text-xs text-gray-500 mt-0.5">Hitung uang tunai di laci kasir sebelum mulai</p>
@@ -234,8 +281,8 @@ export default function ShiftPage() {
 
       {/* Tutup Shift Modal */}
       {showClose && active && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl">
             <div className="p-5 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900">Tutup Shift</h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -287,61 +334,150 @@ export default function ShiftPage() {
         </div>
       )}
 
-      {/* Detail Shift Modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="bg-white rounded-2xl w-full max-w-sm shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Detail Shift</h2>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+      {/* Rekap Shift Modal */}
+      {showRecap && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between no-print">
+              <h2 className="font-semibold text-gray-900">Rekap Shift</h2>
+              <button onClick={() => setShowRecap(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <div className="p-5 space-y-3 text-sm">
-              <Row label="Kasir" value={selected.user.name} />
-              <Row label="Buka" value={fmt(selected.openedAt)} />
-              <Row
-                label="Tutup"
-                value={selected.closedAt ? fmt(selected.closedAt) : "Masih aktif"}
-              />
-              <Row label="Durasi" value={duration(selected.openedAt, selected.closedAt)} />
-              <div className="border-t border-gray-100 pt-3 space-y-2">
-                <Row label="Modal Awal" value={formatRupiah(selected.openingCash)} />
-                <Row label="Uang Penutup" value={selected.closingCash !== null ? formatRupiah(selected.closingCash) : "-"} />
-                {selected.closingCash !== null && (
-                  <Row
-                    label="Selisih Tunai"
-                    value={formatRupiah(selected.closingCash - selected.openingCash)}
-                    highlight
-                  />
-                )}
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-5 recap-print">
+              {/* Header Struk */}
+              <div className="text-center mb-4">
+                <div className="font-bold text-lg text-gray-900">Z-RESTO</div>
+                <div className="text-xs text-gray-500">Rekap Shift Harian</div>
               </div>
-              <div className="border-t border-gray-100 pt-3 space-y-2">
-                <Row label="Total Order" value={`${selected.totalOrders} order`} />
-                <Row label="Total Penjualan" value={formatRupiah(selected.totalSales)} highlight />
+
+              <div className="border-t border-dashed border-gray-300 my-3" />
+
+              {/* Info Shift */}
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Kasir</span>
+                  <span className="font-medium">{showRecap.user.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Shift Buka</span>
+                  <span>{fmtDate(showRecap.openedAt)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Shift Tutup</span>
+                  <span>{showRecap.closedAt ? fmtDate(showRecap.closedAt) : "Masih Aktif"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Durasi</span>
+                  <span className="font-medium">{duration(showRecap.openedAt, showRecap.closedAt)}</span>
+                </div>
               </div>
-              {selected.notes && (
-                <div className="bg-gray-50 rounded-xl px-3 py-2 text-xs text-gray-600">
-                  Catatan: {selected.notes}
+
+              <div className="border-t border-dashed border-gray-300 my-3" />
+
+              {/* Ringkasan Keuangan */}
+              <div className="mb-4">
+                <div className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Ringkasan Keuangan</div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Modal Awal</span>
+                    <span>{formatRupiah(showRecap.openingCash)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Penjualan</span>
+                    <span className="font-bold text-emerald-600">{formatRupiah(showRecap.totalSales)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Total Order</span>
+                    <span>{showRecap.totalOrders} transaksi</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metode Pembayaran */}
+              <div className="mb-4">
+                <div className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Metode Pembayaran</div>
+                <div className="space-y-2 text-sm">
+                  {showRecap.paymentBreakdown ? (
+                    <>
+                      {Object.entries(showRecap.paymentBreakdown).map(([method, amount]) => (
+                        <div key={method} className="flex justify-between">
+                          <span className="text-gray-500">{PAYMENT_LABEL[method] || method}</span>
+                          <span>{formatRupiah(amount)}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="text-gray-400 text-xs italic">Data breakdown belum tersedia</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-gray-300 my-3" />
+
+              {/* Selisih Kas */}
+              {showRecap.closingCash !== null && (
+                <div className="mb-4">
+                  <div className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Penyesuaian Kas</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Uang Tunai di Laci</span>
+                      <span>{formatRupiah(showRecap.closingCash)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Modal Awal</span>
+                      <span>{formatRupiah(showRecap.openingCash)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-200">
+                      <span className="text-gray-500">Selisih Tunai</span>
+                      <span className={`font-bold ${
+                        (showRecap.closingCash - showRecap.openingCash) >= 0 
+                          ? "text-emerald-600" 
+                          : "text-red-600"
+                      }`}>
+                        {formatRupiah(showRecap.closingCash - showRecap.openingCash)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
+
+              {/* Catatan */}
+              {showRecap.notes && (
+                <div className="bg-gray-50 rounded-xl px-3 py-2 text-xs text-gray-600 mb-4">
+                  <span className="font-medium">Catatan:</span> {showRecap.notes}
+                </div>
+              )}
+
+              <div className="border-t border-dashed border-gray-300 my-3" />
+
+              {/* Footer */}
+              <div className="text-center text-xs text-gray-400 space-y-1">
+                <div>Dicetak: {fmtDate(new Date().toISOString())}</div>
+                <div className="font-medium text-gray-500">★ Terima kasih ★</div>
+                <div className="text-gray-300">Powered by Z-Resto</div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="p-4 border-t border-gray-100 flex gap-2 no-print">
+              <button
+                onClick={() => setShowRecap(null)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Tutup
+              </button>
+              <button
+                onClick={printRecap}
+                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
+              >
+                🖨️ Cetak Rekap
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className={highlight ? "font-bold text-gray-900" : "text-gray-800"}>{value}</span>
     </div>
   );
 }
