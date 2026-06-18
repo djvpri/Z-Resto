@@ -2,6 +2,39 @@ import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+async function getPaymentBreakdown(branchId: string, openedAt: Date, closedAt: Date | null) {
+  const where: any = {
+    branchId,
+    status: "COMPLETED",
+    paidAt: { gte: openedAt },
+  };
+  if (closedAt) {
+    where.paidAt.lte = closedAt;
+  }
+
+  const orders = await prisma.order.groupBy({
+    by: ["paymentMethod"],
+    where,
+    _sum: { totalAmount: true },
+    _count: true,
+  });
+
+  const breakdown: Record<string, number> = {
+    CASH: 0,
+    QRIS: 0,
+    TRANSFER: 0,
+    CARD: 0,
+  };
+
+  for (const o of orders) {
+    if (o.paymentMethod) {
+      breakdown[o.paymentMethod] = o._sum.totalAmount || 0;
+    }
+  }
+
+  return breakdown;
+}
+
 export async function GET(req: NextRequest) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,7 +65,22 @@ export async function GET(req: NextRequest) {
     take: 30,
   });
 
-  return Response.json({ shifts, active });
+  // Hitung payment breakdown untuk setiap shift
+  const shiftsWithBreakdown = await Promise.all(
+    shifts.map(async (s) => {
+      const paymentBreakdown = await getPaymentBreakdown(s.branchId, s.openedAt, s.closedAt);
+      return { ...s, paymentBreakdown };
+    })
+  );
+
+  // Breakdown untuk shift aktif
+  let activeWithBreakdown = null;
+  if (active) {
+    const paymentBreakdown = await getPaymentBreakdown(active.branchId, active.openedAt, null);
+    activeWithBreakdown = { ...active, paymentBreakdown };
+  }
+
+  return Response.json({ shifts: shiftsWithBreakdown, active: activeWithBreakdown });
 }
 
 export async function POST(req: NextRequest) {

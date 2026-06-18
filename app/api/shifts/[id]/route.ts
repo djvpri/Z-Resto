@@ -26,7 +26,7 @@ export async function PATCH(
     where: {
       branchId: shift.branchId,
       status: "COMPLETED",
-      createdAt: { gte: shift.openedAt },
+      paidAt: { gte: shift.openedAt, lte: new Date() },
     },
     select: { totalAmount: true },
   });
