@@ -487,18 +487,19 @@ export default function POSPage() {
   async function payAllTable() {
     if (!tableId) return;
     setLoading(true);
+    setError("");
     try {
-      // Cari order PENDING di meja ini
-      const ordersRes = await fetch(`/api/orders?tableId=${tableId}`);
+      // Fetch ringan — cuma cari order PENDING IDs di meja ini
+      const ordersRes = await fetch(`/api/orders?tableId=${tableId}&status=PENDING`);
       const ordersData = await ordersRes.json();
-      const pendingOrders = ordersData.orders?.filter((o: any) => o.status === "PENDING") || [];
+      const pendingOrders = ordersData.orders || [];
 
       if (pendingOrders.length === 0) {
         setError("Tidak ada order yang perlu dibayar");
         return;
       }
 
-      // Bayar semua
+      // Bayar semua via action payAll (server handle di 1 transaksi)
       const payRes = await fetch(`/api/orders/${pendingOrders[0].id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -509,7 +510,6 @@ export default function POSPage() {
         const d = await payRes.json();
         const selectedTable = tables.find((t) => t.id === tableId);
 
-        // Tampilkan struk dengan detail semua item
         setReceipt({
           orderNumber: d.orderNumbers.join(", "),
           paidAt: new Date().toISOString(),
@@ -523,8 +523,14 @@ export default function POSPage() {
           tenantName,
         });
         clearCart();
+        invalidateCache("/api/tables");
         refreshTables();
+      } else {
+        const d = await payRes.json();
+        setError(d.error || "Gagal memproses pembayaran");
       }
+    } catch (e) {
+      setError("Gagal menghubungi server");
     } finally {
       setLoading(false);
     }

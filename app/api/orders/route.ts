@@ -11,9 +11,15 @@ export async function GET(req: NextRequest) {
   const branchId = user.role === "OWNER"
     ? (searchParams.get("branchId") || undefined)
     : user.branchId || undefined;
+  const tableId = searchParams.get("tableId") || undefined;
+  const status = searchParams.get("status") || undefined;
+
+  const where: any = { branchId, ...(branchId ? {} : { branch: { tenantId: user.tenantId } }) };
+  if (tableId) where.tableId = tableId;
+  if (status) where.status = status;
 
   const orders = await prisma.order.findMany({
-    where: { branchId, ...(branchId ? {} : { branch: { tenantId: user.tenantId } }) },
+    where,
     include: { items: { include: { menuItem: true } }, cashier: true, table: true },
     orderBy: { createdAt: "desc" },
     take: 50,

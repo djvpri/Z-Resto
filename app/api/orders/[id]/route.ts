@@ -54,7 +54,7 @@ export async function PATCH(
       return Response.json({ error: "Hanya Owner & Manager" }, { status: 403 });
     }
 
-    // Ambil semua order PENDING di meja ini
+    // Ambil semua order PENDING di meja ini (pakai composite index)
     const pendingOrders = await prisma.order.findMany({
       where: {
         branchId: order.branchId,

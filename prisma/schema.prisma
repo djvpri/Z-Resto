@@ -243,6 +243,7 @@ model Order {
   @@index([cashierId])
   @@index([status])
   @@index([createdAt])
+  @@index([branchId, tableId, status])
 }
 
 model OrderItem {
