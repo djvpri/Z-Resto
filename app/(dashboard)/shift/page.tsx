@@ -385,12 +385,17 @@ export default function ShiftPage() {
                     <span>{formatRupiah(showRecap.openingCash)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Total Penjualan</span>
-                    <span className="font-bold text-emerald-600">{formatRupiah(showRecap.totalSales)}</span>
+                    <span className="text-gray-500">Total Penjualan Tunai</span>
+                    <span className="font-medium">{formatRupiah(showRecap.paymentBreakdown?.CASH || 0)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Total Order</span>
-                    <span>{showRecap.totalOrders} transaksi</span>
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
+                    <span className="text-gray-500 font-medium">Kas Akhir Tunai</span>
+                    <span className="font-bold text-emerald-600">
+                      {formatRupiah(showRecap.openingCash + (showRecap.paymentBreakdown?.CASH || 0))}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 italic">
+                    (Modal Awal + Penjualan Tunai)
                   </div>
                 </div>
               </div>
@@ -422,22 +427,25 @@ export default function ShiftPage() {
                   <div className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">Penyesuaian Kas</div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Uang Tunai di Laci</span>
-                      <span>{formatRupiah(showRecap.closingCash)}</span>
+                      <span className="text-gray-500">Kas Akhir Tunai (Harusnya)</span>
+                      <span>{formatRupiah(showRecap.openingCash + (showRecap.paymentBreakdown?.CASH || 0))}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Modal Awal</span>
-                      <span>{formatRupiah(showRecap.openingCash)}</span>
+                      <span className="text-gray-500">Uang Tunai di Laci (Seharusnya)</span>
+                      <span className="font-medium">{formatRupiah(showRecap.closingCash)}</span>
                     </div>
                     <div className="flex justify-between pt-2 border-t border-gray-200">
-                      <span className="text-gray-500">Selisih Tunai</span>
-                      <span className={`font-bold ${
-                        (showRecap.closingCash - showRecap.openingCash) >= 0 
-                          ? "text-emerald-600" 
-                          : "text-red-600"
-                      }`}>
-                        {formatRupiah(showRecap.closingCash - showRecap.openingCash)}
-                      </span>
+                      <span className="text-gray-500 font-medium">Selisih</span>
+                      {(() => {
+                        const expected = showRecap.openingCash + (showRecap.paymentBreakdown?.CASH || 0);
+                        const actual = showRecap.closingCash;
+                        const diff = actual - expected;
+                        return (
+                          <span className={`font-bold ${diff === 0 ? "text-gray-600" : diff > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {diff === 0 ? "Sesuai ✓" : formatRupiah(diff)}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
