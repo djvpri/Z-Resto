@@ -191,6 +191,7 @@ model DiningTable {
 
   branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
   orders   Order[]
+  reservations Reservation[]
 
   @@unique([branchId, number])
   @@index([branchId])
@@ -300,4 +301,40 @@ model Shift {
 
   @@index([branchId])
   @@index([userId])
+}
+
+// =====================
+// RESERVASI MEJA
+// =====================
+
+enum ReservationStatus {
+  PENDING     // Menunggu kedatangan
+  CONFIRMED   // Sudah dikonfirmasi
+  SEATED      // Sudah duduk (check-in)
+  COMPLETED   // Selesai
+  CANCELLED   // Dibatalkan
+  NO_SHOW     // Tidak datang
+}
+
+model Reservation {
+  id           String             @id @default(cuid())
+  branchId     String
+  tableId      String?
+  customerName String
+  phone        String?
+  partySize    Int                // jumlah tamu
+  reserveAt    DateTime           // waktu reservasi
+  duration     Int                @default(120) // durasi dalam menit
+  status       ReservationStatus  @default(PENDING)
+  notes        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  branch       Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  table         DiningTable?      @relation(fields: [tableId], references: [id])
+
+  @@index([branchId])
+  @@index([tableId])
+  @@index([reserveAt])
+  @@index([status])
 }

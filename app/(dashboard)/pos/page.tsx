@@ -84,6 +84,11 @@ export default function POSPage() {
   const [tableError, setTableError] = useState("");
   const [userRole, setUserRole] = useState<string>("");
   const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [showReserveModal, setShowReserveModal] = useState(false);
+  const [reserveForm, setReserveForm] = useState({ customerName: "", phone: "", partySize: "2", tableId: "", reserveAt: "", duration: "120", notes: "" });
+  const [reserveError, setReserveError] = useState("");
+  const [tableTab, setTableTab] = useState<"layout" | "reservations">("layout");
 
   const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
@@ -207,6 +212,59 @@ export default function POSPage() {
       .then((d) => setTables(d.tables || []));
   }
 
+  function loadReservations() {
+    const today = new Date().toISOString().slice(0, 10);
+    fetch(`/api/reservations?date=${today}`)
+      .then((r) => r.json())
+      .then((d) => setReservations(d.reservations || []));
+  }
+
+  async function createReservation() {
+    setReserveError("");
+    const { customerName, phone, partySize, tableId, reserveAt, duration, notes } = reserveForm;
+    if (!customerName || !reserveAt || !partySize) {
+      setReserveError("Nama, waktu, dan jumlah tamu wajib diisi");
+      return;
+    }
+    const res = await fetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName,
+        phone: phone || undefined,
+        partySize: Number(partySize),
+        tableId: tableId || undefined,
+        reserveAt: new Date(reserveAt).toISOString(),
+        duration: Number(duration),
+        notes: notes || undefined,
+      }),
+    });
+    if (res.ok) {
+      setShowReserveModal(false);
+      setReserveForm({ customerName: "", phone: "", partySize: "2", tableId: "", reserveAt: "", duration: "120", notes: "" });
+      loadReservations();
+      refreshTables();
+    } else {
+      const d = await res.json();
+      setReserveError(d.error || "Gagal membuat reservasi");
+    }
+  }
+
+  async function reservationAction(id: string, action: string) {
+    const res = await fetch(`/api/reservations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (res.ok) {
+      loadReservations();
+      refreshTables();
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal");
+    }
+  }
+
   useEffect(() => {
     fetch("/api/menu")
       .then((r) => r.json())
@@ -227,6 +285,7 @@ export default function POSPage() {
       .then((r) => r.json())
       .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
       .catch(() => {});
+    loadReservations();
   }, []);
 
   async function openShift() {
@@ -792,31 +851,56 @@ export default function POSPage() {
         {/* VIEW: TABLES */}
         {view === "tables" && (
           <div className="flex-1 p-4 overflow-y-auto">
-            {/* Header & Legend */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex gap-4 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                  <span className="text-gray-600">Kosong</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-amber-400" />
-                  <span className="text-gray-600">Terisi</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <span className="text-gray-600">Reservasi</span>
-                </div>
-              </div>
+            {/* Sub tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setTableTab("layout")}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  tableTab === "layout" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 border border-gray-200"
+                }`}
+              >
+                🪑 Layout Meja
+              </button>
+              <button
+                onClick={() => { setTableTab("reservations"); loadReservations(); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  tableTab === "reservations" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 border border-gray-200"
+                }`}
+              >
+                📅 Reservasi {reservations.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED").length > 0 && (
+                  <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                    {reservations.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED").length}
+                  </span>
+                )}
+              </button>
               {["OWNER", "MANAGER"].includes(userRole) && (
                 <button
-                  onClick={() => setShowManageTables(true)}
-                  className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+                  onClick={() => setShowReserveModal(true)}
+                  className="ml-auto px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                  ⚙️ Kelola Meja
+                  + Reservasi
                 </button>
               )}
             </div>
+
+            {/* Tab: Layout Meja */}
+            {tableTab === "layout" && (
+              <>
+                {/* Legend */}
+                <div className="flex gap-4 mb-4 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                    <span className="text-gray-600">Kosong</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-amber-400" />
+                    <span className="text-gray-600">Terisi</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-400" />
+                    <span className="text-gray-600">Reservasi</span>
+                  </div>
+                </div>
 
             {/* Table grid */}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
@@ -857,6 +941,84 @@ export default function POSPage() {
                 </button>
               ))}
             </div>
+              </>
+            )}
+
+            {/* Tab: Reservasi Hari Ini */}
+            {tableTab === "reservations" && (
+              <div className="space-y-3">
+                {reservations.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400 text-sm">
+                    <div className="text-4xl mb-3">📅</div>
+                    Belum ada reservasi hari ini
+                  </div>
+                ) : (
+                  reservations.map((r) => (
+                    <div key={r.id} className="bg-white border border-gray-100 rounded-xl p-4 space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-medium text-gray-800">{r.customerName}</div>
+                          <div className="text-xs text-gray-500">
+                            {r.phone && `${r.phone} · `}{r.partySize} tamu
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          r.status === "PENDING" ? "bg-amber-100 text-amber-700" :
+                          r.status === "CONFIRMED" ? "bg-blue-100 text-blue-700" :
+                          r.status === "SEATED" ? "bg-emerald-100 text-emerald-700" :
+                          r.status === "CANCELLED" ? "bg-red-100 text-red-700" :
+                          r.status === "NO_SHOW" ? "bg-gray-100 text-gray-700" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>
+                          {r.status === "PENDING" ? "Menunggu" :
+                           r.status === "CONFIRMED" ? "Dikonfirmasi" :
+                           r.status === "SEATED" ? "Duduk" :
+                           r.status === "CANCELLED" ? "Batal" :
+                           r.status === "NO_SHOW" ? "Tidak Datang" : r.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        🕐 {new Date(r.reserveAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                        {r.table && ` · 🪑 Meja ${r.table.number}`}
+                        {` · ${r.duration} menit`}
+                      </div>
+                      {r.notes && <div className="text-xs text-gray-400 italic">{r.notes}</div>}
+                      {/* Aksi */}
+                      <div className="flex gap-2 pt-1">
+                        {r.status === "PENDING" && (
+                          <>
+                            <button onClick={() => reservationAction(r.id, "confirm")} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">✅ Konfirmasi</button>
+                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">✕ Batal</button>
+                          </>
+                        )}
+                        {r.status === "CONFIRMED" && (
+                          <>
+                            <button onClick={() => reservationAction(r.id, "checkin")} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100">🪑 Check-in</button>
+                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">✕ Batal</button>
+                          </>
+                        )}
+                        {r.status === "PENDING" && (
+                          <button onClick={() => reservationAction(r.id, "noShow")} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200">🚫 Tidak Datang</button>
+                        )}
+                        {["OWNER", "MANAGER"].includes(userRole) && (r.status === "PENDING" || r.status === "CONFIRMED") && (
+                          <button
+                            onClick={async () => {
+                              if (confirm("Hapus reservasi ini?")) {
+                                await fetch(`/api/reservations/${r.id}`, { method: "DELETE" });
+                                loadReservations();
+                              }
+                            }}
+                            className="text-[10px] px-2 py-1 text-gray-400 hover:text-red-500 ml-auto"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -928,6 +1090,75 @@ export default function POSPage() {
                   🗑️ Hapus Meja
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reservasi Modal */}
+      {showReserveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Buat Reservasi</h2>
+              <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Pelanggan *</label>
+                <input type="text" value={reserveForm.customerName} onChange={(e) => setReserveForm({ ...reserveForm, customerName: e.target.value })}
+                  placeholder="Nama tamu" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">No. HP</label>
+                  <input type="tel" value={reserveForm.phone} onChange={(e) => setReserveForm({ ...reserveForm, phone: e.target.value })}
+                    placeholder="08xxx" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Tamu *</label>
+                  <input type="number" value={reserveForm.partySize} onChange={(e) => setReserveForm({ ...reserveForm, partySize: e.target.value })}
+                    min="1" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Waktu *</label>
+                  <input type="datetime-local" value={reserveForm.reserveAt} onChange={(e) => setReserveForm({ ...reserveForm, reserveAt: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Durasi (menit)</label>
+                  <select value={reserveForm.duration} onChange={(e) => setReserveForm({ ...reserveForm, duration: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <option value="60">1 jam</option>
+                    <option value="90">1.5 jam</option>
+                    <option value="120">2 jam</option>
+                    <option value="180">3 jam</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Meja (opsional)</label>
+                <select value={reserveForm.tableId} onChange={(e) => setReserveForm({ ...reserveForm, tableId: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="">Belum ditentukan</option>
+                  {tables.filter((t) => t.status === "AVAILABLE").map((t) => (
+                    <option key={t.id} value={t.id}>Meja {t.number} ({t.capacity} kursi)</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                <textarea value={reserveForm.notes} onChange={(e) => setReserveForm({ ...reserveForm, notes: e.target.value })}
+                  placeholder="Contoh: Ulang tahun, kursi bayi..." rows={2}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
+              </div>
+              {reserveError && <div className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{reserveError}</div>}
+            </div>
+            <div className="p-5 border-t border-gray-100 flex gap-2">
+              <button onClick={() => setShowReserveModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Batal</button>
+              <button onClick={createReservation} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">📅 Simpan Reservasi</button>
             </div>
           </div>
         </div>
