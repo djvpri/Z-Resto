@@ -60,7 +60,7 @@ type ActiveOrder = {
   totalAmount: number;
   createdAt: string;
   table: { number: string } | null;
-  items: { menuItem: { name: string }; quantity: number }[];
+  items: { id: string; menuItem: { name: string }; quantity: number; unitPrice: number }[];
 };
 
 export default function POSPage() {
@@ -82,6 +82,9 @@ export default function POSPage() {
   const [cancelLoading, setCancelLoading] = useState<string | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [cancelItemConfirm, setCancelItemConfirm] = useState<string | null>(null);
+  const [cancelItemLoading, setCancelItemLoading] = useState<string | null>(null);
 
   const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
     useCartStore();
@@ -95,6 +98,12 @@ export default function POSPage() {
         );
         setActiveOrders(active);
       });
+  }
+
+  function refreshTables() {
+    fetch("/api/tables")
+      .then((r) => r.json())
+      .then((d) => setTables(d.tables || []));
   }
 
   useEffect(() => {
@@ -127,8 +136,30 @@ export default function POSPage() {
       setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
       setCancelConfirm(null);
       setCancelReason("");
+      refreshTables();
     }
     setCancelLoading(null);
+  }
+
+  async function cancelOrderItem(orderId: string, itemId: string) {
+    setCancelItemLoading(itemId);
+    const res = await fetch(`/api/orders/${orderId}/items/${itemId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d.cancelled) {
+        setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
+      } else if (d.order) {
+        setActiveOrders((prev) => prev.map((o) => (o.id === orderId ? d.order : o)));
+      }
+      setCancelItemConfirm(null);
+      refreshTables();
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal membatalkan item");
+    }
+    setCancelItemLoading(null);
   }
 
   async function openShift() {
@@ -270,58 +301,111 @@ export default function POSPage() {
             <div className="px-4 pb-3 space-y-2">
               {activeOrders.map((order) => (
                 <div key={order.id} className="bg-white rounded-xl border border-blue-100 p-3">
+                  {/* Header order */}
                   <div className="flex items-center justify-between mb-2">
-                    <div>
+                    <button
+                      onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
+                      className="flex items-center gap-2 text-left"
+                    >
+                      <span className="text-xs text-blue-400">{expandedOrder === order.id ? "▼" : "▶"}</span>
                       <span className="font-mono text-xs font-semibold text-gray-800">{order.orderNumber}</span>
-                      <span className="text-xs text-gray-400 ml-2">
+                      <span className="text-xs text-gray-400">
                         {order.table ? `Meja ${order.table.number}` : "Takeaway"}
                       </span>
-                    </div>
+                    </button>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                       order.status === "PENDING" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
                     }`}>
                       {order.status === "PENDING" ? "Baru" : "Dikonfirmasi"}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 mb-2">
-                    {order.items.map((i) => `${i.quantity}× ${i.menuItem.name}`).join(", ")}
-                  </div>
+
+                  {/* Item list (expandable) */}
+                  {expandedOrder === order.id && (
+                    <div className="space-y-1.5 mb-2">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs text-gray-700">{item.quantity}× {item.menuItem.name}</span>
+                            <span className="text-xs text-gray-400 ml-2">{formatRupiah(item.unitPrice)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-gray-800">{formatRupiah(item.unitPrice * item.quantity)}</span>
+                            {cancelItemConfirm === item.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => cancelOrderItem(order.id, item.id)}
+                                  disabled={cancelItemLoading === item.id}
+                                  className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-1.5 py-0.5 rounded transition-colors disabled:opacity-50"
+                                >
+                                  {cancelItemLoading === item.id ? "..." : "Ya"}
+                                </button>
+                                <button
+                                  onClick={() => setCancelItemConfirm(null)}
+                                  className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setCancelItemConfirm(item.id)}
+                                className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                title="Batalkan item"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Footer: total + actions */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-emerald-600">
                       {formatRupiah(order.totalAmount)}
                     </span>
-                    {cancelConfirm === order.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={cancelReason}
-                          onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Alasan (opsional)"
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-32 focus:outline-none focus:ring-1 focus:ring-red-400"
-                          autoFocus
-                        />
+                    <div className="flex items-center gap-2">
+                      {expandedOrder === order.id && (
+                        <span className="text-xs text-gray-400">
+                          {order.items.length} item
+                        </span>
+                      )}
+                      {cancelConfirm === order.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            placeholder="Alasan (opsional)"
+                            className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-32 focus:outline-none focus:ring-1 focus:ring-red-400"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => cancelOrder(order.id)}
+                            disabled={cancelLoading === order.id}
+                            className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {cancelLoading === order.id ? "..." : "Semua"}
+                          </button>
+                          <button
+                            onClick={() => { setCancelConfirm(null); setCancelReason(""); }}
+                            className="text-xs text-gray-400 hover:text-gray-600 px-1"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          onClick={() => cancelOrder(order.id)}
-                          disabled={cancelLoading === order.id}
-                          className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                          onClick={() => setCancelConfirm(order.id)}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
                         >
-                          {cancelLoading === order.id ? "..." : "Ya"}
+                          ✕ Batal
                         </button>
-                        <button
-                          onClick={() => { setCancelConfirm(null); setCancelReason(""); }}
-                          className="text-xs text-gray-400 hover:text-gray-600 px-1"
-                        >
-                          Batal
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setCancelConfirm(order.id)}
-                        className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
-                      >
-                        ✕ Batal
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

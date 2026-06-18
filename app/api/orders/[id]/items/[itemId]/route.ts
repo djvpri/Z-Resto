@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Hapus item dari order PENDING
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; itemId: string }> }
@@ -22,51 +21,48 @@ export async function DELETE(
 
   if (!order) return Response.json({ error: "Order tidak ditemukan" }, { status: 404 });
   if (order.branch.tenantId !== user.tenantId) return Response.json({ error: "Forbidden" }, { status: 403 });
-  if (order.status !== "PENDING") {
-    return Response.json({ error: "Hanya order PENDING yang bisa diubah" }, { status: 400 });
-  }
+  if (order.status === "CANCELLED") return Response.json({ error: "Order sudah dibatalkan" }, { status: 400 });
 
-  // Cek item ada di order ini
-  const orderItem = order.items.find((i) => i.id === itemId);
-  if (!orderItem) {
-    return Response.json({ error: "Item tidak ditemukan di order ini" }, { status: 404 });
-  }
+  // Cek apakah item ada di order ini
+  const item = order.items.find((i) => i.id === itemId);
+  if (!item) return Response.json({ error: "Item tidak ditemukan di order ini" }, { status: 404 });
 
   // Hapus item
   await prisma.orderItem.delete({ where: { id: itemId } });
 
-  // Hitung ulang total
+  // Hitung ulang total order
   const remainingItems = order.items.filter((i) => i.id !== itemId);
-  const newSubtotal = remainingItems.reduce((s, i) => s + i.subtotal, 0);
+  const newSubtotal = remainingItems.reduce((sum, i) => sum + i.subtotal, 0);
+  const newTaxAmount = Math.round(newSubtotal * 0.1); // TODO: ambil tax rate dari settings
 
-  // Ambil taxRate dari tenant
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: { taxRate: true },
-  });
-  const taxRate = (tenant?.taxRate ?? 10) / 100;
-  const newTaxAmount = Math.round(newSubtotal * taxRate);
-  const newTotalAmount = newSubtotal + newTaxAmount;
-
-  // Jika tidak ada item tersisa, void order
   if (remainingItems.length === 0) {
-    await prisma.order.update({
+    // Tidak ada item tersisa → batalkan order
+    const updated = await prisma.order.update({
       where: { id },
-      data: { status: "CANCELLED", subtotal: 0, taxAmount: 0, totalAmount: 0 },
+      data: {
+        status: "CANCELLED",
+        subtotal: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        notes: order.notes
+          ? `[CANCEL: Semua item dihapus] | ${order.notes}`
+          : "[CANCEL: Semua item dihapus]",
+      },
+      include: { items: { include: { menuItem: true } }, cashier: true, table: true },
     });
-    return Response.json({ cancelled: true, message: "Order dibatalkan (tidak ada item tersisa)" });
+    return Response.json({ cancelled: true, order: updated });
   }
 
-  // Update total order
+  // Masih ada item → update total
   const updated = await prisma.order.update({
     where: { id },
     data: {
       subtotal: newSubtotal,
       taxAmount: newTaxAmount,
-      totalAmount: newTotalAmount,
+      totalAmount: newSubtotal + newTaxAmount,
     },
-    include: { items: { include: { menuItem: true } } },
+    include: { items: { include: { menuItem: true } }, cashier: true, table: true },
   });
 
-  return Response.json({ order: updated, removed: orderItem });
+  return Response.json({ cancelled: false, order: updated });
 }
