@@ -51,7 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
         <meta name="application-name" content="Z-Resto" />
         <meta name="apple-mobile-web-app-status-bar-content" content="black-translucent" />

@@ -14,16 +14,28 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -33,10 +45,7 @@
       "url": "/pos",
       "description": "Buka kasir langsung",
       "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192" }
       ]
     },
     {
@@ -45,10 +54,7 @@
       "url": "/orders",
       "description": "Lihat riwayat order",
       "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192" }
       ]
     },
     {
@@ -57,10 +63,7 @@
       "url": "/menu",
       "description": "Manajemen menu",
       "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192" }
       ]
     },
     {
@@ -69,10 +72,7 @@
       "url": "/reports",
       "description": "Lihat laporan harian",
       "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any"
-        }
+        { "src": "/icon-192.png", "sizes": "192x192" }
       ]
     }
   ]

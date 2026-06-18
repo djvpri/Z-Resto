@@ -1,4 +1,4 @@
-const CACHE = 'zresto-v2';
+const CACHE = 'zresto-v3';
 const OFFLINE_URL = '/offline';
 
 self.addEventListener('install', (event) => {
@@ -8,7 +8,9 @@ self.addEventListener('install', (event) => {
         '/',
         '/pos',
         '/offline',
-        '/icon.svg'
+        '/icon.svg',
+        '/icon-192.png',
+        '/icon-512.png'
       ]).catch(() => {
         // Ignore cache errors during install
       });
