@@ -561,6 +561,8 @@ export default function POSPage() {
             </button>
           </div>
         </div>
+          </>
+        )}
 
         {/* VIEW: TABLES */}
         {view === "tables" && (
