@@ -59,16 +59,6 @@ const PAYMENT_LABEL: Record<string, string> = {
   CARD: "Kartu Debit/Kredit",
 };
 
-type ActiveOrder = {
-  id: string;
-  orderNumber: string;
-  status: string;
-  totalAmount: number;
-  createdAt: string;
-  table: { number: string } | null;
-  items: { id: string; menuItem: { name: string }; quantity: number; unitPrice: number }[];
-};
-
 export default function POSPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<DiningTable[]>([]);
@@ -99,14 +89,6 @@ export default function POSPage() {
   const [reserveForm, setReserveForm] = useState({ customerName: "", phone: "", partySize: "2", tableId: "", reserveAt: "", duration: "120", notes: "" });
   const [reserveError, setReserveError] = useState("");
   const [tableTab, setTableTab] = useState<"layout" | "reservations">("layout");
-  const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
-  const [showOrders, setShowOrders] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState<string | null>(null);
-  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
-  const [cancelItemConfirm, setCancelItemConfirm] = useState<string | null>(null);
-  const [cancelItemLoading, setCancelItemLoading] = useState<string | null>(null);
 
   const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
@@ -155,6 +137,27 @@ export default function POSPage() {
     setView("menu");
     setShowCart(true);
     setShowTableDetail(null);
+  }
+
+  async function cancelOrderItem(orderId: string, itemId: string) {
+    if (!confirm("Batalkan item ini?")) return;
+    const res = await fetch(`/api/orders/${orderId}/items/${itemId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d.cancelled) {
+        // Order dibatalkan (tidak ada item tersisa)
+        setActiveOrder(null);
+        refreshTables();
+      } else if (d.order) {
+        setActiveOrder(d.order);
+        refreshTables();
+      }
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal membatalkan item");
+    }
   }
 
   async function voidEntireOrder(orderId: string) {
@@ -207,58 +210,6 @@ export default function POSPage() {
     fetch("/api/tables")
       .then((r) => r.json())
       .then((d) => setTables(d.tables || []));
-    loadActiveOrders();
-  }
-
-  function loadActiveOrders() {
-    fetch("/api/orders")
-      .then((r) => r.json())
-      .then((d) => {
-        const active = (d.orders || []).filter(
-          (o: ActiveOrder) => o.status === "PENDING" || o.status === "CONFIRMED"
-        );
-        setActiveOrders(active);
-      });
-  }
-
-  async function cancelOrderFromList(orderId: string) {
-    setCancelLoading(orderId);
-    const res = await fetch(`/api/orders/${orderId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel", reason: cancelReason || "Dibatalkan dari POS" }),
-    });
-    if (res.ok) {
-      setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
-      setCancelConfirm(null);
-      setCancelReason("");
-      refreshTables();
-    } else {
-      const d = await res.json();
-      alert(d.error || "Gagal membatalkan order");
-    }
-    setCancelLoading(null);
-  }
-
-  async function cancelOrderItem(orderId: string, itemId: string) {
-    setCancelItemLoading(itemId);
-    const res = await fetch(`/api/orders/${orderId}/items/${itemId}`, {
-      method: "DELETE",
-    });
-    if (res.ok) {
-      const d = await res.json();
-      if (d.cancelled) {
-        setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
-      } else if (d.order) {
-        setActiveOrders((prev) => prev.map((o) => (o.id === orderId ? d.order : o)));
-      }
-      setCancelItemConfirm(null);
-      refreshTables();
-    } else {
-      const d = await res.json();
-      alert(d.error || "Gagal membatalkan item");
-    }
-    setCancelItemLoading(null);
   }
 
   function loadReservations() {
@@ -335,7 +286,6 @@ export default function POSPage() {
       .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
       .catch(() => {});
     loadReservations();
-    loadActiveOrders();
   }, []);
 
   async function openShift() {
@@ -394,7 +344,7 @@ export default function POSPage() {
       const order = data.order;
       const selectedTable = tables.find((t) => t.id === tableId);
 
-      // Jika meja (order bertahap) — tampilkan notifikasi saja
+      // Jika meja (order bertahap) ΓÇö tampilkan notifikasi saja
       if (tableId) {
         setReceipt({
           orderNumber: order.orderNumber,
@@ -417,7 +367,7 @@ export default function POSPage() {
           notes: order.notes,
         });
       } else {
-        // Takeaway — langsung bayar
+        // Takeaway ΓÇö langsung bayar
         const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
         setReceipt({
           orderNumber: order.orderNumber,
@@ -537,7 +487,7 @@ export default function POSPage() {
       {/* Shift banner */}
       {!activeShift ? (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between shrink-0">
-          <span className="text-xs text-amber-700 font-medium">Belum ada shift aktif — buka shift sebelum mulai transaksi</span>
+          <span className="text-xs text-amber-700 font-medium">Belum ada shift aktif ΓÇö buka shift sebelum mulai transaksi</span>
           <button
             onClick={() => setShowOpenShift(true)}
             className="text-xs font-bold text-amber-700 hover:text-amber-900 border border-amber-300 px-3 py-1 rounded-lg hover:bg-amber-100 transition-colors ml-4 shrink-0"
@@ -548,96 +498,12 @@ export default function POSPage() {
       ) : (
         <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center justify-between shrink-0">
           <span className="text-xs text-emerald-700">
-            Shift aktif · {activeShift.user.name} · sejak{" "}
+            Shift aktif ┬╖ {activeShift.user.name} ┬╖ sejak{" "}
             {new Date(activeShift.openedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
           </span>
           <a href="/shift" className="text-xs font-semibold text-emerald-700 hover:underline ml-4 shrink-0">
-            Kelola Shift →
+            Kelola Shift ΓåÆ
           </a>
-        </div>
-      )}
-
-      {/* Active orders banner */}
-      {activeOrders.length > 0 && (
-        <div className="bg-blue-50 border-b border-blue-100 shrink-0">
-          <button
-            onClick={() => setShowOrders(!showOrders)}
-            className="w-full px-4 py-2 flex items-center justify-between text-left"
-          >
-            <span className="text-xs font-medium text-blue-700">
-              📋 {activeOrders.length} order aktif
-            </span>
-            <span className="text-xs text-blue-500">{showOrders ? "Tutup" : "Lihat"}</span>
-          </button>
-          {showOrders && (
-            <div className="px-4 pb-3 space-y-2">
-              {activeOrders.map((order) => (
-                <div key={order.id} className="bg-white rounded-xl border border-blue-100 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <button
-                      onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
-                      className="flex items-center gap-2 text-left"
-                    >
-                      <span className="text-xs text-blue-400">{expandedOrder === order.id ? "▼" : "▶"}</span>
-                      <span className="font-mono text-xs font-semibold text-gray-800">{order.orderNumber}</span>
-                      <span className="text-xs text-gray-400">
-                        {order.table ? `Meja ${order.table.number}` : "Takeaway"}
-                      </span>
-                    </button>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      order.status === "PENDING" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {order.status === "PENDING" ? "Baru" : "Dikonfirmasi"}
-                    </span>
-                  </div>
-
-                  {expandedOrder === order.id && (
-                    <div className="space-y-1.5 mb-2">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-xs text-gray-700">{item.quantity}× {item.menuItem.name}</span>
-                            <span className="text-xs text-gray-400 ml-2">{formatRupiah(item.unitPrice)}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium text-gray-800">{formatRupiah(item.unitPrice * item.quantity)}</span>
-                            {cancelItemConfirm === item.id ? (
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => cancelOrderItem(order.id, item.id)} disabled={cancelItemLoading === item.id} className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-1.5 py-0.5 rounded transition-colors disabled:opacity-50">
-                                  {cancelItemLoading === item.id ? "..." : "Ya"}
-                                </button>
-                                <button onClick={() => setCancelItemConfirm(null)} className="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
-                              </div>
-                            ) : (
-                              <button onClick={() => setCancelItemConfirm(item.id)} className="text-xs text-red-400 hover:text-red-600" title="Batalkan item">✕</button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-emerald-600">{formatRupiah(order.totalAmount)}</span>
-                    <div className="flex items-center gap-2">
-                      {expandedOrder === order.id && <span className="text-xs text-gray-400">{order.items.length} item</span>}
-                      {cancelConfirm === order.id ? (
-                        <div className="flex items-center gap-2">
-                          <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Alasan (opsional)" className="text-xs border border-gray-200 rounded-lg px-2 py-1 w-32 focus:outline-none focus:ring-1 focus:ring-red-400" autoFocus />
-                          <button onClick={() => cancelOrderFromList(order.id)} disabled={cancelLoading === order.id} className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-lg transition-colors disabled:opacity-50">
-                            {cancelLoading === order.id ? "..." : "Semua"}
-                          </button>
-                          <button onClick={() => { setCancelConfirm(null); setCancelReason(""); }} className="text-xs text-gray-400 hover:text-gray-600 px-1">Batal</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setCancelConfirm(order.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">✕ Batal</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -646,7 +512,7 @@ export default function POSPage() {
         onClick={() => setShowCart(true)}
         className="lg:hidden fixed bottom-4 right-4 z-40 bg-emerald-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all"
       >
-        <span className="text-xl">🛒</span>
+        <span className="text-xl">≡ƒ¢Æ</span>
         {items.length > 0 && (
           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
             {items.reduce((s, i) => s + i.quantity, 0)}
@@ -662,7 +528,7 @@ export default function POSPage() {
             view === "menu" ? "text-emerald-600 border-b-2 border-emerald-600" : "text-gray-400 hover:text-gray-600"
           }`}
         >
-          🍽️ Menu
+          ≡ƒì╜∩╕Å Menu
         </button>
         <button
           onClick={() => setView("tables")}
@@ -670,7 +536,7 @@ export default function POSPage() {
             view === "tables" ? "text-emerald-600 border-b-2 border-emerald-600" : "text-gray-400 hover:text-gray-600"
           }`}
         >
-          🪑 Meja
+          ≡ƒ¬æ Meja
         </button>
       </div>
 
@@ -713,7 +579,7 @@ export default function POSPage() {
                       />
                     ) : (
                       <div className="bg-emerald-50 rounded-lg h-12 lg:h-14 flex items-center justify-center text-xl lg:text-2xl mb-2">
-                        🍽️
+                        ≡ƒì╜∩╕Å
                       </div>
                     )}
                     <div className="text-[10px] lg:text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
@@ -749,12 +615,12 @@ export default function POSPage() {
             {tableInfo ? (
               <div className="bg-emerald-50 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span>🪑</span>
+                  <span>≡ƒ¬æ</span>
                   <div>
                     <div className="text-sm font-medium text-gray-800">Meja {tableInfo.number}</div>
                     {tableInfo.status === "OCCUPIED" && tableInfo.activeOrderCount > 0 && (
                       <div className="text-[10px] text-amber-600">
-                        {tableInfo.activeOrderCount} order aktif · {formatRupiah(tableInfo.activeOrderTotal)}
+                        {tableInfo.activeOrderCount} order aktif ┬╖ {formatRupiah(tableInfo.activeOrderTotal)}
                       </div>
                     )}
                   </div>
@@ -763,7 +629,7 @@ export default function POSPage() {
                   onClick={() => { setTable(null); setActiveOrderId(null); }}
                   className="text-xs text-gray-400 hover:text-red-500"
                 >
-                  ✕
+                  Γ£ò
                 </button>
               </div>
             ) : (
@@ -775,10 +641,10 @@ export default function POSPage() {
                 }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="">🥡 Takeaway</option>
+                <option value="">≡ƒÑí Takeaway</option>
                 {tables.map((t) => (
                   <option key={t.id} value={t.id}>
-                    🪑 Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "⚠️ Terisi" : ""}
+                    ≡ƒ¬æ Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "ΓÜá∩╕Å Terisi" : ""}
                   </option>
                 ))}
               </select>
@@ -792,7 +658,7 @@ export default function POSPage() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-                    📋 Order Aktif ({activeOrder.orderNumber})
+                    ≡ƒôï Order Aktif ({activeOrder.orderNumber})
                   </h3>
                   <span className="text-xs font-bold text-amber-700">
                     {formatRupiah(activeOrder.totalAmount)}
@@ -806,7 +672,7 @@ export default function POSPage() {
                           {item.menuItem?.name || item.name} x{item.quantity}
                         </div>
                         <div className="text-[10px] text-gray-500">
-                          {formatRupiah(item.unitPrice)} × {item.quantity} = {formatRupiah(item.subtotal)}
+                          {formatRupiah(item.unitPrice)} ├ù {item.quantity} = {formatRupiah(item.subtotal)}
                         </div>
                       </div>
                       <button
@@ -814,7 +680,7 @@ export default function POSPage() {
                         className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0 px-1"
                         title="Batalkan item ini"
                       >
-                        ✕
+                        Γ£ò
                       </button>
                     </div>
                   ))}
@@ -824,7 +690,7 @@ export default function POSPage() {
                     onClick={() => voidEntireOrder(activeOrder.id)}
                     className="text-[10px] text-red-400 hover:text-red-600"
                   >
-                    🗑️ Batalkan Semua
+                    ≡ƒùæ∩╕Å Batalkan Semua
                   </button>
                 </div>
                 <div className="border-t border-dashed border-gray-200 mt-3 mb-3" />
@@ -833,7 +699,7 @@ export default function POSPage() {
 
             {items.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-4xl mb-3">🛒</div>
+                <div className="text-4xl mb-3">≡ƒ¢Æ</div>
                 <p className="text-sm text-gray-400">Pilih menu untuk mulai pesanan</p>
               </div>
             ) : (
@@ -853,7 +719,7 @@ export default function POSPage() {
                         onClick={() => updateQty(item.menuItemId, item.quantity - 1)}
                         className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-200 flex items-center justify-center"
                       >
-                        −
+                        ΓêÆ
                       </button>
                       <span className="text-sm font-medium w-5 text-center">{item.quantity}</span>
                       <button
@@ -958,14 +824,14 @@ export default function POSPage() {
                   disabled={loading || items.length === 0}
                   className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                 >
-                  {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
+                  {loading ? "Menyimpan..." : `≡ƒô¥ Simpan ke Meja (${formatRupiah(total())})`}
                 </button>
                 <button
                   onClick={payAllTable}
                   disabled={loading}
                   className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
                 >
-                  {loading ? "Memproses..." : `💳 Bayar Semua`}
+                  {loading ? "Memproses..." : `≡ƒÆ│ Bayar Semua`}
                 </button>
               </div>
             ) : (
@@ -993,7 +859,7 @@ export default function POSPage() {
                   tableTab === "layout" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 border border-gray-200"
                 }`}
               >
-                🪑 Layout Meja
+                ≡ƒ¬æ Layout Meja
               </button>
               <button
                 onClick={() => { setTableTab("reservations"); loadReservations(); }}
@@ -1001,7 +867,7 @@ export default function POSPage() {
                   tableTab === "reservations" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 border border-gray-200"
                 }`}
               >
-                📅 Reservasi {reservations.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED").length > 0 && (
+                ≡ƒôà Reservasi {reservations.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED").length > 0 && (
                   <span className="ml-1 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                     {reservations.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED").length}
                   </span>
@@ -1052,18 +918,18 @@ export default function POSPage() {
                 >
                   <div className="text-center">
                     <div className="text-2xl mb-1">
-                      {t.status === "OCCUPIED" ? "🍽️" : "🪑"}
+                      {t.status === "OCCUPIED" ? "≡ƒì╜∩╕Å" : "≡ƒ¬æ"}
                     </div>
                     <div className="font-bold text-sm text-gray-800">{t.number}</div>
                     <div className="text-[10px] text-gray-500">{t.capacity} kursi</div>
                     {t.status === "OCCUPIED" && (
                       <div className="mt-2 space-y-0.5">
                         <div className="text-[10px] font-medium text-amber-700">
-                          {t.activeOrderCount} order · {formatRupiah(t.activeOrderTotal)}
+                          {t.activeOrderCount} order ┬╖ {formatRupiah(t.activeOrderTotal)}
                         </div>
                         {t.firstOrderAt && (
                           <div className="text-[10px] text-amber-600">
-                            ⏱️ {tableDuration(t.firstOrderAt)}
+                            ΓÅ▒∩╕Å {tableDuration(t.firstOrderAt)}
                           </div>
                         )}
                       </div>
@@ -1083,7 +949,7 @@ export default function POSPage() {
               <div className="space-y-3">
                 {reservations.length === 0 ? (
                   <div className="text-center py-16 text-gray-400 text-sm">
-                    <div className="text-4xl mb-3">📅</div>
+                    <div className="text-4xl mb-3">≡ƒôà</div>
                     Belum ada reservasi hari ini
                   </div>
                 ) : (
@@ -1093,7 +959,7 @@ export default function POSPage() {
                         <div>
                           <div className="font-medium text-gray-800">{r.customerName}</div>
                           <div className="text-xs text-gray-500">
-                            {r.phone && `${r.phone} · `}{r.partySize} tamu
+                            {r.phone && `${r.phone} ┬╖ `}{r.partySize} tamu
                           </div>
                         </div>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -1112,27 +978,27 @@ export default function POSPage() {
                         </span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        🕐 {new Date(r.reserveAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                        {r.table && ` · 🪑 Meja ${r.table.number}`}
-                        {` · ${r.duration} menit`}
+                        ≡ƒòÉ {new Date(r.reserveAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                        {r.table && ` ┬╖ ≡ƒ¬æ Meja ${r.table.number}`}
+                        {` ┬╖ ${r.duration} menit`}
                       </div>
                       {r.notes && <div className="text-xs text-gray-400 italic">{r.notes}</div>}
                       {/* Aksi */}
                       <div className="flex gap-2 pt-1">
                         {r.status === "PENDING" && (
                           <>
-                            <button onClick={() => reservationAction(r.id, "confirm")} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">✅ Konfirmasi</button>
-                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">✕ Batal</button>
+                            <button onClick={() => reservationAction(r.id, "confirm")} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100">Γ£à Konfirmasi</button>
+                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">Γ£ò Batal</button>
                           </>
                         )}
                         {r.status === "CONFIRMED" && (
                           <>
-                            <button onClick={() => reservationAction(r.id, "checkin")} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100">🪑 Check-in</button>
-                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">✕ Batal</button>
+                            <button onClick={() => reservationAction(r.id, "checkin")} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100">≡ƒ¬æ Check-in</button>
+                            <button onClick={() => reservationAction(r.id, "cancel")} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">Γ£ò Batal</button>
                           </>
                         )}
                         {r.status === "PENDING" && (
-                          <button onClick={() => reservationAction(r.id, "noShow")} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200">🚫 Tidak Datang</button>
+                          <button onClick={() => reservationAction(r.id, "noShow")} className="text-[10px] px-2 py-1 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200">≡ƒÜ½ Tidak Datang</button>
                         )}
                         {["OWNER", "MANAGER"].includes(userRole) && (r.status === "PENDING" || r.status === "CONFIRMED") && (
                           <button
@@ -1144,7 +1010,7 @@ export default function POSPage() {
                             }}
                             className="text-[10px] px-2 py-1 text-gray-400 hover:text-red-500 ml-auto"
                           >
-                            🗑️
+                            ≡ƒùæ∩╕Å
                           </button>
                         )}
                       </div>
@@ -1166,7 +1032,7 @@ export default function POSPage() {
                 <h2 className="font-semibold text-gray-900">Meja {showTableDetail.number}</h2>
                 <p className="text-xs text-gray-500">{showTableDetail.capacity} kursi</p>
               </div>
-              <button onClick={() => setShowTableDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setShowTableDetail(null)} className="text-gray-400 hover:text-gray-600">Γ£ò</button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {showTableDetail.status === "OCCUPIED" && showTableDetail.activeOrderCount > 0 ? (
@@ -1191,7 +1057,7 @@ export default function POSPage() {
                     onClick={() => addMoreToOrder(showTableDetail)}
                     className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
                   >
-                    ➕ Tambah Pesanan Lagi
+                    Γ₧ò Tambah Pesanan Lagi
                   </button>
                   <button
                     onClick={() => {
@@ -1201,7 +1067,7 @@ export default function POSPage() {
                     }}
                     className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
                   >
-                    💳 Bayar Semua ({formatRupiah(showTableDetail.activeOrderTotal)})
+                    ≡ƒÆ│ Bayar Semua ({formatRupiah(showTableDetail.activeOrderTotal)})
                   </button>
                 </>
               ) : (
@@ -1209,7 +1075,7 @@ export default function POSPage() {
                   onClick={() => startNewOrder(showTableDetail)}
                   className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
                 >
-                  🪑 Mulai Order di Meja Ini
+                  ≡ƒ¬æ Mulai Order di Meja Ini
                 </button>
               )}
               {showTableDetail.status !== "OCCUPIED" && ["OWNER", "MANAGER"].includes(userRole) && (
@@ -1221,7 +1087,7 @@ export default function POSPage() {
                   }}
                   className="w-full py-3 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
                 >
-                  🗑️ Hapus Meja
+                  ≡ƒùæ∩╕Å Hapus Meja
                 </button>
               )}
             </div>
@@ -1235,7 +1101,7 @@ export default function POSPage() {
           <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] flex flex-col">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Buat Reservasi</h2>
-              <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => setShowReserveModal(false)} className="text-gray-400 hover:text-gray-600">Γ£ò</button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               <div>
@@ -1292,7 +1158,7 @@ export default function POSPage() {
             </div>
             <div className="p-5 border-t border-gray-100 flex gap-2">
               <button onClick={() => setShowReserveModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Batal</button>
-              <button onClick={createReservation} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">📅 Simpan Reservasi</button>
+              <button onClick={createReservation} className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors">≡ƒôà Simpan Reservasi</button>
             </div>
           </div>
         </div>
@@ -1304,7 +1170,7 @@ export default function POSPage() {
           <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] flex flex-col">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Kelola Meja</h2>
-              <button onClick={() => { setShowManageTables(false); refreshTables(); }} className="text-gray-400 hover:text-gray-600">✕</button>
+              <button onClick={() => { setShowManageTables(false); refreshTables(); }} className="text-gray-400 hover:text-gray-600">Γ£ò</button>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
               {/* Form tambah meja */}
@@ -1416,7 +1282,7 @@ export default function POSPage() {
                   onClick={() => setShowCart(false)}
                   className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
                 >
-                  ✕
+                  Γ£ò
                 </button>
               </div>
             </div>
@@ -1426,12 +1292,12 @@ export default function POSPage() {
               {tableInfo ? (
                 <div className="bg-emerald-50 rounded-xl px-3 py-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span>🪑</span>
+                    <span>≡ƒ¬æ</span>
                     <div>
                       <div className="text-sm font-medium text-gray-800">Meja {tableInfo.number}</div>
                       {tableInfo.status === "OCCUPIED" && tableInfo.activeOrderCount > 0 && (
                         <div className="text-[10px] text-amber-600">
-                          {tableInfo.activeOrderCount} order aktif · {formatRupiah(tableInfo.activeOrderTotal)}
+                          {tableInfo.activeOrderCount} order aktif ┬╖ {formatRupiah(tableInfo.activeOrderTotal)}
                         </div>
                       )}
                     </div>
@@ -1440,7 +1306,7 @@ export default function POSPage() {
                     onClick={() => { setTable(null); setActiveOrderId(null); }}
                     className="text-xs text-gray-400 hover:text-red-500"
                   >
-                    ✕
+                    Γ£ò
                   </button>
                 </div>
               ) : (
@@ -1452,10 +1318,10 @@ export default function POSPage() {
                   }}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="">🥡 Takeaway</option>
+                  <option value="">≡ƒÑí Takeaway</option>
                   {tables.map((t) => (
                     <option key={t.id} value={t.id}>
-                      🪑 Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "⚠️ Terisi" : ""}
+                      ≡ƒ¬æ Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "ΓÜá∩╕Å Terisi" : ""}
                     </option>
                   ))}
                 </select>
@@ -1469,7 +1335,7 @@ export default function POSPage() {
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-                      📋 Order Aktif
+                      ≡ƒôï Order Aktif
                     </h3>
                     <span className="text-xs font-bold text-amber-700">
                       {formatRupiah(activeOrder.totalAmount)}
@@ -1487,7 +1353,7 @@ export default function POSPage() {
                           onClick={() => cancelOrderItem(activeOrder.id, item.id)}
                           className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0"
                         >
-                          ✕
+                          Γ£ò
                         </button>
                       </div>
                     ))}
@@ -1498,7 +1364,7 @@ export default function POSPage() {
 
               {items.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-3xl mb-2">🛒</div>
+                  <div className="text-3xl mb-2">≡ƒ¢Æ</div>
                   <p className="text-xs text-gray-400">Pilih menu untuk mulai pesanan</p>
                 </div>
               ) : (
@@ -1518,7 +1384,7 @@ export default function POSPage() {
                           onClick={() => updateQty(item.menuItemId, item.quantity - 1)}
                           className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-200 flex items-center justify-center"
                         >
-                          −
+                          ΓêÆ
                         </button>
                         <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
                         <button
@@ -1623,14 +1489,14 @@ export default function POSPage() {
                     disabled={loading || items.length === 0}
                     className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                   >
-                    {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
+                    {loading ? "Menyimpan..." : `≡ƒô¥ Simpan ke Meja (${formatRupiah(total())})`}
                   </button>
                   <button
                     onClick={payAllTable}
                     disabled={loading}
                     className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
                   >
-                    {loading ? "Memproses..." : `💳 Bayar Semua`}
+                    {loading ? "Memproses..." : `≡ƒÆ│ Bayar Semua`}
                   </button>
                 </div>
               ) : (
@@ -1658,11 +1524,11 @@ export default function POSPage() {
                 onClick={() => setReceipt(null)}
                 className="text-gray-400 hover:text-gray-600 text-lg leading-none w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100"
               >
-                ✕
+                Γ£ò
               </button>
             </div>
 
-            {/* Receipt content — this area is printed */}
+            {/* Receipt content ΓÇö this area is printed */}
             <div className="receipt-content px-5 py-4 font-mono text-[11px] text-gray-800 max-h-[60vh] overflow-y-auto">
               {/* Header */}
               <div className="text-center mb-3">
@@ -1776,7 +1642,7 @@ export default function POSPage() {
                 onClick={() => window.print()}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
               >
-                🖨️ Cetak
+                ≡ƒû¿∩╕Å Cetak
               </button>
             </div>
           </div>
