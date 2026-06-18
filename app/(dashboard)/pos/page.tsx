@@ -44,6 +44,8 @@ type Receipt = {
   taxRate: number;
   tenantName: string;
   notes?: string;
+  paidAmount?: number;
+  change?: number;
 };
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -67,6 +69,7 @@ export default function POSPage() {
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [shiftLoading, setShiftLoading] = useState(false);
+  const [paidAmount, setPaidAmount] = useState("");
 
   const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
     useCartStore();
@@ -127,6 +130,7 @@ export default function POSPage() {
           tableId,
           paymentMethod,
           notes: orderNotes,
+          paidAmount: paymentMethod === "CASH" ? Number(paidAmount) : total(),
           items: items.map((i) => ({
             menuItemId: i.menuItemId,
             quantity: i.quantity,
@@ -143,6 +147,8 @@ export default function POSPage() {
       const data = await res.json();
       const order = data.order;
       const selectedTable = tables.find((t) => t.id === tableId);
+
+      const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
 
       setReceipt({
         orderNumber: order.orderNumber,
@@ -163,10 +169,13 @@ export default function POSPage() {
         taxRate,
         tenantName,
         notes: order.notes,
+        paidAmount: paymentMethod === "CASH" ? Number(paidAmount) : order.totalAmount,
+        change: changeAmount,
       });
 
       clearCart();
       setOrderNotes("");
+      setPaidAmount("");
     } finally {
       setLoading(false);
     }
@@ -386,10 +395,38 @@ export default function POSPage() {
               ))}
             </div>
 
+            {/* Paid amount input (CASH only) */}
+            {paymentMethod === "CASH" && (
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-gray-600">Dibayarkan (Rp)</label>
+                <input
+                  type="number"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {paidAmount && Number(paidAmount) >= total() && (
+                  <div className="flex justify-between items-center bg-emerald-50 rounded-xl px-3 py-2">
+                    <span className="text-xs font-medium text-emerald-700">Kembali</span>
+                    <span className="text-sm font-bold text-emerald-700">
+                      {formatRupiah(Number(paidAmount) - total())}
+                    </span>
+                  </div>
+                )}
+                {paidAmount && Number(paidAmount) > 0 && Number(paidAmount) < total() && (
+                  <div className="bg-red-50 border border-red-100 text-red-600 text-xs px-3 py-2 rounded-xl">
+                    Nominal kurang dari total
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Place order */}
             <button
               onClick={placeOrder}
-              disabled={loading || items.length === 0}
+              disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
               className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
             >
               {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
@@ -481,6 +518,23 @@ export default function POSPage() {
                   <span>{formatRupiah(receipt.totalAmount)}</span>
                 </div>
               </div>
+
+              {/* Payment info (CASH only) */}
+              {receipt.paymentMethod === "CASH" && receipt.paidAmount !== undefined && (
+                <>
+                  <div className="border-t border-dashed border-gray-300 my-2.5" />
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Dibayar</span>
+                      <span>{formatRupiah(receipt.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-sm pt-1.5 mt-1 border-t border-gray-200">
+                      <span>Kembali</span>
+                      <span>{formatRupiah(receipt.change || 0)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {receipt.notes && (
                 <>
