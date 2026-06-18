@@ -70,6 +70,7 @@ export default function POSPage() {
   const [openingCash, setOpeningCash] = useState("");
   const [shiftLoading, setShiftLoading] = useState(false);
   const [paidAmount, setPaidAmount] = useState("");
+  const [showCart, setShowCart] = useState(false);
 
   const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
     useCartStore();
@@ -220,16 +221,29 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Mobile cart toggle button */}
+      <button
+        onClick={() => setShowCart(true)}
+        className="lg:hidden fixed bottom-4 right-4 z-40 bg-emerald-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all"
+      >
+        <span className="text-xl">🛒</span>
+        {items.length > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+            {items.reduce((s, i) => s + i.quantity, 0)}
+          </span>
+        )}
+      </button>
+
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Menu */}
-        <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3">
+        <div className="flex-1 flex flex-col overflow-hidden p-3 lg:p-4 gap-2 lg:gap-3">
           {/* Category tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-1 shrink-0">
+          <div className="flex gap-1.5 lg:gap-2 overflow-x-auto pb-1 shrink-0">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
+                className={`px-2.5 lg:px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
                   activeCategory === cat
                     ? "bg-emerald-600 text-white shadow-sm"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300"
@@ -241,28 +255,28 @@ export default function POSPage() {
           </div>
 
           {/* Menu grid */}
-          <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 content-start">
+          <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 lg:gap-2.5 content-start">
             {filtered.map((item) => (
               <button
                 key={item.id}
                 onClick={() => addItem({ menuItemId: item.id, name: item.name, price: item.price })}
-                className="bg-white rounded-xl border border-gray-100 p-3 text-left hover:border-emerald-400 hover:shadow-md active:scale-[0.97] transition-all"
+                className="bg-white rounded-xl border border-gray-100 p-2 lg:p-3 text-left hover:border-emerald-400 hover:shadow-md active:scale-[0.97] transition-all"
               >
                 {item.imageUrl ? (
                   <img
                     src={item.imageUrl}
                     alt={item.name}
-                    className="rounded-lg h-14 w-full object-cover mb-2.5"
+                    className="rounded-lg h-12 lg:h-14 w-full object-cover mb-2"
                   />
                 ) : (
-                  <div className="bg-emerald-50 rounded-lg h-14 flex items-center justify-center text-2xl mb-2.5">
+                  <div className="bg-emerald-50 rounded-lg h-12 lg:h-14 flex items-center justify-center text-xl lg:text-2xl mb-2">
                     🍽️
                   </div>
                 )}
-                <div className="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
+                <div className="text-[10px] lg:text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
                   {item.name}
                 </div>
-                <div className="text-emerald-600 font-bold text-xs mt-1.5">{formatRupiah(item.price)}</div>
+                <div className="text-emerald-600 font-bold text-[10px] lg:text-xs mt-1 lg:mt-1.5">{formatRupiah(item.price)}</div>
               </button>
             ))}
             {filtered.length === 0 && (
@@ -273,8 +287,8 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Right: Cart */}
-        <div className="w-72 bg-white border-l border-gray-100 flex flex-col shrink-0">
+        {/* Right: Cart - Desktop (side panel) */}
+        <div className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col shrink-0">
           {/* Cart header */}
           <div className="p-4 border-b border-gray-100">
             <div className="flex items-center justify-between mb-3">
@@ -435,10 +449,198 @@ export default function POSPage() {
         </div>
       </div>
 
+      {/* Mobile Cart - Slide up panel */}
+      {showCart && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowCart(false)}
+          />
+          {/* Panel */}
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] flex flex-col shadow-2xl">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-800">Pesanan</h2>
+                {items.length > 0 && (
+                  <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    {items.reduce((s, i) => s + i.quantity, 0)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {items.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    Batal
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowCart(false)}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Table selector */}
+            <div className="px-4 pt-3 pb-2">
+              <select
+                value={tableId || ""}
+                onChange={(e) => setTable(e.target.value || null)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">🥡 Takeaway</option>
+                {tables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    🪑 Meja {t.number} ({t.capacity} orang)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Cart items */}
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+              {items.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-2">🛒</div>
+                  <p className="text-xs text-gray-400">Pilih menu untuk mulai pesanan</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <div key={item.menuItemId} className="flex items-start gap-2 py-1.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">
+                          {item.name}
+                        </div>
+                        <div className="text-xs text-emerald-600 font-semibold mt-0.5">
+                          {formatRupiah(item.price * item.quantity)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => updateQty(item.menuItemId, item.quantity - 1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-200 flex items-center justify-center"
+                        >
+                          −
+                        </button>
+                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQty(item.menuItemId, item.quantity + 1)}
+                          className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-200 flex items-center justify-center"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 space-y-2.5">
+              {error && (
+                <div className="bg-red-50 border border-red-100 text-red-600 text-xs px-3 py-2 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              {/* Totals */}
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-gray-500">
+                  <span>Subtotal</span>
+                  <span>{formatRupiah(subtotal())}</span>
+                </div>
+                <div className="flex justify-between text-gray-500">
+                  <span>PPN {taxRate}%</span>
+                  <span>{formatRupiah(tax())}</span>
+                </div>
+                <div className="flex justify-between font-bold text-gray-900 text-base pt-1.5 border-t border-gray-100 mt-1.5">
+                  <span>Total</span>
+                  <span className="text-emerald-600">{formatRupiah(total())}</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <input
+                type="text"
+                value={orderNotes}
+                onChange={(e) => {
+                  setOrderNotes(e.target.value);
+                  setNotes(e.target.value);
+                }}
+                placeholder="Catatan pesanan..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+
+              {/* Payment method */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["CASH", "QRIS", "TRANSFER", "CARD"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setPaymentMethod(m)}
+                    className={`py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      paymentMethod === m
+                        ? "bg-emerald-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {m === "CASH" ? "Tunai" : m === "QRIS" ? "QRIS" : m === "TRANSFER" ? "Transfer" : "Kartu"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Paid amount input (CASH only) */}
+              {paymentMethod === "CASH" && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-gray-600">Dibayarkan (Rp)</label>
+                  <input
+                    type="number"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  {paidAmount && Number(paidAmount) >= total() && (
+                    <div className="flex justify-between items-center bg-emerald-50 rounded-xl px-3 py-2">
+                      <span className="text-xs font-medium text-emerald-700">Kembali</span>
+                      <span className="text-sm font-bold text-emerald-700">
+                        {formatRupiah(Number(paidAmount) - total())}
+                      </span>
+                    </div>
+                  )}
+                  {paidAmount && Number(paidAmount) > 0 && Number(paidAmount) < total() && (
+                    <div className="bg-red-50 border border-red-100 text-red-600 text-xs px-3 py-2 rounded-xl">
+                      Nominal kurang dari total
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Place order */}
+              <button
+                onClick={placeOrder}
+                disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
+                className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              >
+                {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Receipt Modal */}
       {receipt && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden max-h-[90vh] flex flex-col">
             {/* Modal header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h2 className="font-semibold text-gray-800 text-sm">Struk Pembayaran</h2>
@@ -573,8 +775,8 @@ export default function POSPage() {
 
       {/* Buka Shift Modal */}
       {showOpenShift && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl">
             <div className="p-5 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900">Buka Shift</h2>
               <p className="text-xs text-gray-500 mt-0.5">Hitung uang di laci sebelum mulai</p>
