@@ -19,7 +19,6 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Hitung total order aktif per meja
   const tablesWithInfo = tables.map((t) => {
     const activeOrders = t.orders;
     const hasActiveOrder = activeOrders.length > 0;
@@ -39,4 +38,35 @@ export async function GET(req: NextRequest) {
   });
 
   return Response.json({ tables: tablesWithInfo });
+}
+
+// Tambah meja baru
+export async function POST(req: NextRequest) {
+  const user = await getSession(req);
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.branchId) return Response.json({ error: "Tidak ada cabang" }, { status: 400 });
+
+  const { number, capacity } = await req.json();
+
+  if (!number) {
+    return Response.json({ error: "Nomor meja wajib diisi" }, { status: 400 });
+  }
+
+  // Cek apakah nomor meja sudah ada di branch ini
+  const existing = await prisma.diningTable.findFirst({
+    where: { branchId: user.branchId, number: String(number) },
+  });
+  if (existing) {
+    return Response.json({ error: `Nomor meja ${number} sudah ada` }, { status: 409 });
+  }
+
+  const table = await prisma.diningTable.create({
+    data: {
+      branchId: user.branchId,
+      number: String(number),
+      capacity: capacity || 4,
+    },
+  });
+
+  return Response.json({ table }, { status: 201 });
 }

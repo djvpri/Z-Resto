@@ -78,6 +78,10 @@ export default function POSPage() {
   const [view, setView] = useState<"menu" | "tables">("menu");
   const [showTableDetail, setShowTableDetail] = useState<DiningTable | null>(null);
   const [tableHistory, setTableHistory] = useState<any[]>([]);
+  const [showManageTables, setShowManageTables] = useState(false);
+  const [newTableNumber, setNewTableNumber] = useState("");
+  const [newTableCapacity, setNewTableCapacity] = useState("4");
+  const [tableError, setTableError] = useState("");
 
   const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
@@ -138,6 +142,42 @@ export default function POSPage() {
     setView("menu");
     setShowCart(true);
     setShowTableDetail(null);
+  }
+
+  async function addTable() {
+    if (!newTableNumber.trim()) return;
+    setTableError("");
+    const res = await fetch("/api/tables", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ number: newTableNumber.trim(), capacity: Number(newTableCapacity) || 4 }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setTables((prev) => [...prev, { ...d.table, status: "AVAILABLE", activeOrderCount: 0, activeOrderTotal: 0, firstOrderAt: null }]);
+      setNewTableNumber("");
+      setNewTableCapacity("4");
+    } else {
+      const d = await res.json();
+      setTableError(d.error || "Gagal tambah meja");
+    }
+  }
+
+  async function deleteTable(tableId: string) {
+    const res = await fetch(`/api/tables/${tableId}`, { method: "DELETE" });
+    if (res.ok) {
+      setTables((prev) => prev.filter((t) => t.id !== tableId));
+      setShowTableDetail(null);
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal hapus meja");
+    }
+  }
+
+  function refreshTables() {
+    fetch("/api/tables")
+      .then((r) => r.json())
+      .then((d) => setTables(d.tables || []));
   }
 
   useEffect(() => {
@@ -567,20 +607,28 @@ export default function POSPage() {
         {/* VIEW: TABLES */}
         {view === "tables" && (
           <div className="flex-1 p-4 overflow-y-auto">
-            {/* Legend */}
-            <div className="flex gap-4 mb-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                <span className="text-gray-600">Kosong</span>
+            {/* Header & Legend */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                  <span className="text-gray-600">Kosong</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-amber-400" />
+                  <span className="text-gray-600">Terisi</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-400" />
+                  <span className="text-gray-600">Reservasi</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-amber-400" />
-                <span className="text-gray-600">Terisi</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <span className="text-gray-600">Reservasi</span>
-              </div>
+              <button
+                onClick={() => setShowManageTables(true)}
+                className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+              >
+                ⚙️ Kelola Meja
+              </button>
             </div>
 
             {/* Table grid */}
@@ -677,6 +725,103 @@ export default function POSPage() {
                   🪑 Mulai Order di Meja Ini
                 </button>
               )}
+              {showTableDetail.status !== "OCCUPIED" && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Hapus meja ${showTableDetail.number}?`)) {
+                      deleteTable(showTableDetail.id);
+                    }
+                  }}
+                  className="w-full py-3 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
+                >
+                  🗑️ Hapus Meja
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Tables Modal */}
+      {showManageTables && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Kelola Meja</h2>
+              <button onClick={() => { setShowManageTables(false); refreshTables(); }} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {/* Form tambah meja */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Tambah Meja Baru</h3>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs text-gray-500 mb-1">Nomor Meja</label>
+                    <input
+                      type="text"
+                      value={newTableNumber}
+                      onChange={(e) => setNewTableNumber(e.target.value)}
+                      placeholder="Contoh: 1, VIP-A"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="block text-xs text-gray-500 mb-1">Kursi</label>
+                    <input
+                      type="number"
+                      value={newTableCapacity}
+                      onChange={(e) => setNewTableCapacity(e.target.value)}
+                      min="1"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <button
+                    onClick={addTable}
+                    disabled={!newTableNumber.trim()}
+                    className="self-end px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+                  >
+                    + Tambah
+                  </button>
+                </div>
+                {tableError && (
+                  <div className="text-xs text-red-500 mt-2">{tableError}</div>
+                )}
+              </div>
+
+              {/* Daftar meja */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Daftar Meja ({tables.length})</h3>
+                {tables.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        t.status === "OCCUPIED" ? "bg-amber-400" : t.status === "RESERVED" ? "bg-red-400" : "bg-emerald-400"
+                      }`} />
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">Meja {t.number}</div>
+                        <div className="text-[10px] text-gray-500">{t.capacity} kursi</div>
+                      </div>
+                    </div>
+                    {t.status === "OCCUPIED" ? (
+                      <span className="text-[10px] text-amber-600 font-medium">Terisi</span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Hapus meja ${t.number}?`)) {
+                            deleteTable(t.id);
+                          }
+                        }}
+                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
