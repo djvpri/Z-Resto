@@ -6,14 +6,24 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || 
+         (window.navigator as any).standalone === true;
+}
+
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
-    // Cek apakah sudah install
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    // Sudah install → jangan tampilkan
+    if (isStandalone()) {
       setInstalled(true);
       return;
     }
@@ -22,15 +32,16 @@ export default function PWAInstallPrompt() {
     const dismissed = localStorage.getItem("pwa-install-dismissed");
     if (dismissed) {
       const daysSinceDismiss = (Date.now() - Number(dismissed)) / (1000 * 60 * 60 * 24);
-      // Tampilkan lagi setelah 7 hari
       if (daysSinceDismiss < 7) return;
     }
 
+    setIsIos(isIOS());
+
+    // Chrome/Edge — beforeinstallprompt
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Tampilkan banner setelah 3 detik (biar gak langsung muncul)
-      setTimeout(() => setShowBanner(true), 3000);
+      setTimeout(() => setShowBanner(true), 2000);
     };
 
     window.addEventListener("beforeinstallprompt", handler);
@@ -39,19 +50,28 @@ export default function PWAInstallPrompt() {
       setShowBanner(false);
     });
 
+    // iOS / browser lain — tampilkan banner manual setelah 3 detik
+    const timer = setTimeout(() => {
+      // Hanya tampilkan kalau belum ada deferredPrompt (Chrome) dan bukan standalone
+      if (!isStandalone()) {
+        setShowBanner(true);
+      }
+    }, 3000);
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
+      clearTimeout(timer);
     };
   }, []);
 
   async function handleInstall() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      setInstalled(true);
+    if (deferredPrompt) {
+      // Chrome/Edge — native install
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") setInstalled(true);
+      setDeferredPrompt(null);
     }
-    setDeferredPrompt(null);
     setShowBanner(false);
   }
 
@@ -60,8 +80,7 @@ export default function PWAInstallPrompt() {
     setShowBanner(false);
   }
 
-  // Sudah install atau belum bisa install → jangan tampilkan apa-apa
-  if (installed || !showBanner || !deferredPrompt) return null;
+  if (installed || !showBanner) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pointer-events-none">
@@ -72,21 +91,40 @@ export default function PWAInstallPrompt() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-gray-900">Install Z-Resto</div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Pasang sebagai aplikasi di HP kamu — lebih cepat & bisa dipakai offline
-            </div>
+            
+            {deferredPrompt ? (
+              /* Chrome/Edge — satu klik install */
+              <div className="text-xs text-gray-500 mt-0.5">
+                Pasang sebagai aplikasi di HP kamu — lebih cepat & bisa offline
+              </div>
+            ) : isIos ? (
+              /* iOS — manual instruction */
+              <div className="text-xs text-gray-500 mt-0.5">
+                Tap <span className="font-semibold">↗ Bagikan</span> lalu{" "}
+                <span className="font-semibold">"Tambah ke Layar Utama"</span>
+              </div>
+            ) : (
+              /* Browser lain — manual instruction */
+              <div className="text-xs text-gray-500 mt-0.5">
+                Buka menu browser → <span className="font-semibold">"Install App"</span> atau{" "}
+                <span className="font-semibold">"Tambahkan ke layar utama"</span>
+              </div>
+            )}
+
             <div className="flex gap-2 mt-3">
-              <button
-                onClick={handleInstall}
-                className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
-              >
-                Install
-              </button>
+              {deferredPrompt && (
+                <button
+                  onClick={handleInstall}
+                  className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Install
+                </button>
+              )}
               <button
                 onClick={handleDismiss}
                 className="px-3 py-1.5 text-gray-500 text-xs font-medium rounded-lg hover:bg-gray-100 transition-colors"
               >
-                Nanti aja
+                {deferredPrompt ? "Nanti aja" : "Mengerti"}
               </button>
             </div>
           </div>
