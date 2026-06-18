@@ -1024,7 +1024,7 @@ export default function POSPage() {
                   {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
                 </button>
                 <button
-                  onClick={payAllTable}
+                  onClick={() => payAllTable()}
                   disabled={loading}
                   className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
                 >
@@ -1707,7 +1707,7 @@ export default function POSPage() {
                     {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
                   </button>
                   <button
-                    onClick={payAllTable}
+                    onClick={() => payAllTable()}
                     disabled={loading}
                     className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
                   >
