@@ -1231,7 +1231,16 @@ export default function POSPage() {
       {/* Table Detail Modal */}
       {showTableDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
-          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl max-h-[80vh] flex flex-col relative">
+            {/* Loading overlay saat proses bayar */}
+            {loading && (
+              <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-t-2xl lg:rounded-2xl z-10 flex flex-col items-center justify-center gap-3">
+                <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <div className="text-sm font-medium text-gray-700">Memproses pembayaran...</div>
+                <div className="text-xs text-gray-400">Mohon tunggu</div>
+              </div>
+            )}
+
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-900">Meja {showTableDetail.number}</h2>
@@ -1260,19 +1269,28 @@ export default function POSPage() {
                   </div>
                   <button
                     onClick={() => addMoreToOrder(showTableDetail)}
-                    className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
+                    disabled={loading}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
                   >
                     ➕ Tambah Pesanan Lagi
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setTable(showTableDetail.id, showTableDetail);
-                      payAllTable();
+                      await payAllTable();
                       setShowTableDetail(null);
                     }}
-                    className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
+                    disabled={loading}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    💳 Bayar Semua ({formatRupiah(showTableDetail.activeOrderTotal)})
+                    {loading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Memproses...
+                      </>
+                    ) : (
+                      `💳 Bayar Semua (${formatRupiah(showTableDetail.activeOrderTotal)})`
+                    )}
                   </button>
                 </>
               ) : (
