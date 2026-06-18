@@ -83,6 +83,7 @@ export default function POSPage() {
   const [newTableCapacity, setNewTableCapacity] = useState("4");
   const [tableError, setTableError] = useState("");
   const [userRole, setUserRole] = useState<string>("");
+  const [activeOrder, setActiveOrder] = useState<any>(null);
 
   const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
@@ -117,13 +118,57 @@ export default function POSPage() {
   }
 
   function addMoreToOrder(table: DiningTable) {
-    // Buka menu untuk tambah item ke order aktif di meja ini
+    // Load order aktif dari meja ini
     setTable(table.id, table);
     clearCart();
     setTable(table.id, table);
+    // Ambil order PENDING dari meja
+    fetch(`/api/orders?tableId=${table.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const pending = d.orders?.find((o: any) => o.status === "PENDING");
+        setActiveOrder(pending || null);
+      });
     setView("menu");
     setShowCart(true);
     setShowTableDetail(null);
+  }
+
+  async function cancelOrderItem(orderId: string, itemId: string) {
+    if (!confirm("Batalkan item ini?")) return;
+    const res = await fetch(`/api/orders/${orderId}/items/${itemId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      const d = await res.json();
+      if (d.cancelled) {
+        // Order dibatalkan (tidak ada item tersisa)
+        setActiveOrder(null);
+        refreshTables();
+      } else if (d.order) {
+        setActiveOrder(d.order);
+        refreshTables();
+      }
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal membatalkan item");
+    }
+  }
+
+  async function voidEntireOrder(orderId: string) {
+    if (!confirm("Batalkan SEMUA pesanan di meja ini?")) return;
+    const res = await fetch(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "void", reason: "Dibatalkan oleh kasir" }),
+    });
+    if (res.ok) {
+      setActiveOrder(null);
+      refreshTables();
+    } else {
+      const d = await res.json();
+      alert(d.error || "Gagal membatalkan order");
+    }
   }
 
   async function addTable() {
@@ -549,6 +594,50 @@ export default function POSPage() {
 
           {/* Cart items */}
           <div className="flex-1 overflow-y-auto p-4">
+            {/* Order aktif dari meja (sebelumnya sudah di-order) */}
+            {tableId && activeOrder && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                    📋 Order Aktif ({activeOrder.orderNumber})
+                  </h3>
+                  <span className="text-xs font-bold text-amber-700">
+                    {formatRupiah(activeOrder.totalAmount)}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {activeOrder.items?.map((item: any) => (
+                    <div key={item.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-800 truncate">
+                          {item.menuItem?.name || item.name} x{item.quantity}
+                        </div>
+                        <div className="text-[10px] text-gray-500">
+                          {formatRupiah(item.unitPrice)} × {item.quantity} = {formatRupiah(item.subtotal)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => cancelOrderItem(activeOrder.id, item.id)}
+                        className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0 px-1"
+                        title="Batalkan item ini"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={() => voidEntireOrder(activeOrder.id)}
+                    className="text-[10px] text-red-400 hover:text-red-600"
+                  >
+                    🗑️ Batalkan Semua
+                  </button>
+                </div>
+                <div className="border-t border-dashed border-gray-200 mt-3 mb-3" />
+              </div>
+            )}
+
             {items.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-4xl mb-3">🛒</div>
@@ -1010,6 +1099,38 @@ export default function POSPage() {
 
             {/* Cart items */}
             <div className="flex-1 overflow-y-auto px-4 py-2">
+              {/* Order aktif dari meja */}
+              {tableId && activeOrder && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                      📋 Order Aktif
+                    </h3>
+                    <span className="text-xs font-bold text-amber-700">
+                      {formatRupiah(activeOrder.totalAmount)}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {activeOrder.items?.map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-1.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-800 truncate">
+                            {item.menuItem?.name || item.name} x{item.quantity}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => cancelOrderItem(activeOrder.id, item.id)}
+                          className="text-red-400 hover:text-red-600 text-xs ml-2 shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 mt-2 mb-2" />
+                </div>
+              )}
+
               {items.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-3xl mb-2">🛒</div>
