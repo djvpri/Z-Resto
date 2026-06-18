@@ -484,13 +484,14 @@ export default function POSPage() {
     }
   }
 
-  async function payAllTable() {
-    if (!tableId) return;
+  async function payAllTable(targetTableId?: string) {
+    const tid = targetTableId || tableId;
+    if (!tid) return;
     setLoading(true);
     setError("");
     try {
       // Fetch ringan — cuma cari order PENDING IDs di meja ini
-      const ordersRes = await fetch(`/api/orders?tableId=${tableId}&status=PENDING`);
+      const ordersRes = await fetch(`/api/orders?tableId=${tid}&status=PENDING`);
       const ordersData = await ordersRes.json();
       const pendingOrders = ordersData.orders || [];
 
@@ -508,7 +509,7 @@ export default function POSPage() {
 
       if (payRes.ok) {
         const d = await payRes.json();
-        const selectedTable = tables.find((t) => t.id === tableId);
+        const selectedTable = tables.find((t) => t.id === tid);
 
         setReceipt({
           orderNumber: d.orderNumbers.join(", "),
@@ -1277,7 +1278,7 @@ export default function POSPage() {
                   <button
                     onClick={async () => {
                       setTable(showTableDetail.id, showTableDetail);
-                      await payAllTable();
+                      await payAllTable(showTableDetail.id);
                       setShowTableDetail(null);
                     }}
                     disabled={loading}
