@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   if (!branchId) return Response.json({ tables: [] });
 
   const tables = await prisma.diningTable.findMany({
-    where: { branchId: user.branchId },
+    where: { branchId },
     orderBy: [{ number: "asc" }],
     include: {
       orders: {
