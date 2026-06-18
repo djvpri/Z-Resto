@@ -82,6 +82,7 @@ export default function POSPage() {
   const [newTableNumber, setNewTableNumber] = useState("");
   const [newTableCapacity, setNewTableCapacity] = useState("4");
   const [tableError, setTableError] = useState("");
+  const [userRole, setUserRole] = useState<string>("");
 
   const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
@@ -196,6 +197,10 @@ export default function POSPage() {
     fetch("/api/shifts")
       .then((r) => r.json())
       .then((d) => setActiveShift(d.active || null));
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
+      .catch(() => {});
   }, []);
 
   async function openShift() {
@@ -623,12 +628,14 @@ export default function POSPage() {
                   <span className="text-gray-600">Reservasi</span>
                 </div>
               </div>
-              <button
-                onClick={() => setShowManageTables(true)}
-                className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
-              >
-                ⚙️ Kelola Meja
-              </button>
+              {["OWNER", "MANAGER"].includes(userRole) && (
+                <button
+                  onClick={() => setShowManageTables(true)}
+                  className="text-xs font-medium text-emerald-600 hover:text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+                >
+                  ⚙️ Kelola Meja
+                </button>
+              )}
             </div>
 
             {/* Table grid */}
@@ -725,7 +732,7 @@ export default function POSPage() {
                   🪑 Mulai Order di Meja Ini
                 </button>
               )}
-              {showTableDetail.status !== "OCCUPIED" && (
+              {showTableDetail.status !== "OCCUPIED" && ["OWNER", "MANAGER"].includes(userRole) && (
                 <button
                   onClick={() => {
                     if (confirm(`Hapus meja ${showTableDetail.number}?`)) {
@@ -807,7 +814,7 @@ export default function POSPage() {
                     </div>
                     {t.status === "OCCUPIED" ? (
                       <span className="text-[10px] text-amber-600 font-medium">Terisi</span>
-                    ) : (
+                    ) : ["OWNER", "MANAGER"].includes(userRole) ? (
                       <button
                         onClick={() => {
                           if (confirm(`Hapus meja ${t.number}?`)) {
@@ -818,7 +825,7 @@ export default function POSPage() {
                       >
                         Hapus
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 ))}
               </div>

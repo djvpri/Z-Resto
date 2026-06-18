@@ -40,11 +40,14 @@ export async function GET(req: NextRequest) {
   return Response.json({ tables: tablesWithInfo });
 }
 
-// Tambah meja baru
+// Tambah meja baru (hanya OWNER & MANAGER)
 export async function POST(req: NextRequest) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   if (!user.branchId) return Response.json({ error: "Tidak ada cabang" }, { status: 400 });
+  if (!["OWNER", "MANAGER"].includes(user.role)) {
+    return Response.json({ error: "Hanya Owner & Manager yang bisa mengelola meja" }, { status: 403 });
+  }
 
   const { number, capacity } = await req.json();
 

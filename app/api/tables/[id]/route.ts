@@ -2,13 +2,16 @@ import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Update meja
+// Update meja (hanya OWNER & MANAGER)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!["OWNER", "MANAGER"].includes(user.role)) {
+    return Response.json({ error: "Hanya Owner & Manager yang bisa mengelola meja" }, { status: 403 });
+  }
 
   const { id } = await params;
   const { number, capacity, status } = await req.json();
@@ -43,13 +46,16 @@ export async function PATCH(
   return Response.json({ table: updated });
 }
 
-// Hapus meja
+// Hapus meja (hanya OWNER & MANAGER)
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!["OWNER", "MANAGER"].includes(user.role)) {
+    return Response.json({ error: "Hanya Owner & Manager yang bisa mengelola meja" }, { status: 403 });
+  }
 
   const { id } = await params;
 
