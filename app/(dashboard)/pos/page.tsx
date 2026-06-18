@@ -102,42 +102,23 @@ export default function POSPage() {
     if (table.status === "OCCUPIED" && table.activeOrderCount > 0) {
       setShowTableDetail(table);
     } else {
-      setTable(table.id, table);
-      setView("menu");
-      setShowCart(true);
-    }
-  }
-
-  function handleTableHistory(table: DiningTable) {
-    fetch(`/api/orders?tableId=${table.id}&status=active`)
-      .then(r => r.json())
-      .then(d => {
-        setTableHistory(d.orders || []);
-        setShowTableDetail(table);
-      });
-  }
-
-  async function continueOrder(table: DiningTable) {
-    // Load order items dari server
-    const res = await fetch(`/api/orders?tableId=${table.id}&status=active`);
-    const d = await res.json();
-    if (d.orders && d.orders.length > 0) {
-      const order = d.orders[0];
-      // Set table di cart
-      setTable(table.id, table);
-      setActiveOrderId(order.id);
-      // Clear cart dulu, nanti user tambah menu baru
-      clearCart();
-      setTable(table.id, table);
-      setView("menu");
-      setShowCart(true);
-      setShowTableDetail(null);
+      startNewOrder(table);
     }
   }
 
   function startNewOrder(table: DiningTable) {
     setTable(table.id, table);
     setActiveOrderId(null);
+    clearCart();
+    setTable(table.id, table);
+    setView("menu");
+    setShowCart(true);
+    setShowTableDetail(null);
+  }
+
+  function addMoreToOrder(table: DiningTable) {
+    // Buka menu untuk tambah item ke order aktif di meja ini
+    setTable(table.id, table);
     clearCart();
     setTable(table.id, table);
     setView("menu");
@@ -800,7 +781,7 @@ export default function POSPage() {
               <button onClick={() => setShowTableDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              {showTableDetail.status === "OCCUPIED" ? (
+              {showTableDetail.status === "OCCUPIED" && showTableDetail.activeOrderCount > 0 ? (
                 <>
                   <div className="bg-amber-50 rounded-xl p-3 text-sm space-y-1">
                     <div className="flex justify-between">
@@ -808,7 +789,7 @@ export default function POSPage() {
                       <span className="font-medium">{showTableDetail.activeOrderCount} order</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Total</span>
+                      <span className="text-gray-500">Total Belum Bayar</span>
                       <span className="font-bold text-amber-700">{formatRupiah(showTableDetail.activeOrderTotal)}</span>
                     </div>
                     {showTableDetail.firstOrderAt && (
@@ -819,21 +800,25 @@ export default function POSPage() {
                     )}
                   </div>
                   <button
-                    onClick={() => continueOrder(showTableDetail)}
+                    onClick={() => addMoreToOrder(showTableDetail)}
                     className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
                   >
-                    ➕ Tambah Pesanan
+                    ➕ Tambah Pesanan Lagi
                   </button>
                   <button
-                    onClick={() => startNewOrder(showTableDetail)}
+                    onClick={() => {
+                      setTable(showTableDetail.id, showTableDetail);
+                      payAllTable();
+                      setShowTableDetail(null);
+                    }}
                     className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
                   >
-                    📝 Order Baru
+                    💳 Bayar Semua ({formatRupiah(showTableDetail.activeOrderTotal)})
                   </button>
                 </>
               ) : (
                 <button
-                  onClick={() => { startNewOrder(showTableDetail); }}
+                  onClick={() => startNewOrder(showTableDetail)}
                   className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
                 >
                   🪑 Mulai Order di Meja Ini
