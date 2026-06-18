@@ -83,10 +83,11 @@ export default function OrdersPage() {
     if (!selected) return;
     setVoidLoading(true);
     setVoidError("");
+    const action = canVoid ? "void" : "cancel";
     const res = await fetch(`/api/orders/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "void", reason: voidReason }),
+      body: JSON.stringify({ action, reason: voidReason }),
     });
     if (res.ok) {
       const d = await res.json();
@@ -102,6 +103,7 @@ export default function OrdersPage() {
   }
 
   const canVoid = userRole === "OWNER" || userRole === "MANAGER";
+  const canCancel = selected?.status === "PENDING" || selected?.status === "CONFIRMED";
 
   return (
     <div className="p-6">
@@ -282,14 +284,14 @@ export default function OrdersPage() {
               )}
 
               {/* Void section */}
-              {canVoid && selected.status !== "CANCELLED" && (
+              {(canVoid || canCancel) && selected.status !== "CANCELLED" && (
                 <div className="border-t border-gray-100 pt-4">
                   {!showVoidConfirm ? (
                     <button
                       onClick={() => setShowVoidConfirm(true)}
                       className="w-full py-2 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
                     >
-                      Batalkan / Void Order
+                      {canVoid ? "Batalkan / Void Order" : "Batalkan Order"}
                     </button>
                   ) : (
                     <div className="space-y-2">

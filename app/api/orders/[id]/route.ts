@@ -14,6 +14,10 @@ export async function PATCH(
   const body = await req.json();
   const { action, reason, paymentMethod, paidAmount } = body;
 
+  if (!["void", "cancel", "pay", "payAll"].includes(action)) {
+    return Response.json({ error: "Action tidak valid" }, { status: 400 });
+  }
+
   const order = await prisma.order.findUnique({
     where: { id },
     include: { branch: { select: { tenantId: true } } },
@@ -121,6 +125,34 @@ export async function PATCH(
         status: "CANCELLED",
         notes: reason
           ? `[VOID: ${reason}]${order.notes ? " | " + order.notes : ""}`
+          : order.notes,
+      },
+      include: { items: { include: { menuItem: true } }, cashier: true, table: true },
+    });
+
+    return Response.json({ order: updated });
+  }
+
+  // Action: CANCEL — cashier bisa batal order sendiri
+  if (action === "cancel") {
+    if (order.status === "CANCELLED") {
+      return Response.json({ error: "Order sudah dibatalkan" }, { status: 400 });
+    }
+    if (user.role === "CASHIER") {
+      if (order.cashierId !== user.id) {
+        return Response.json({ error: "Hanya bisa membatalkan order sendiri" }, { status: 403 });
+      }
+      if (!["PENDING", "CONFIRMED"].includes(order.status)) {
+        return Response.json({ error: "Order sudah diproses, tidak bisa dibatalkan" }, { status: 400 });
+      }
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        status: "CANCELLED",
+        notes: reason
+          ? `[CANCEL: ${reason}]${order.notes ? " | " + order.notes : ""}`
           : order.notes,
       },
       include: { items: { include: { menuItem: true } }, cashier: true, table: true },
