@@ -1,6 +1,19 @@
-const CACHE = 'zresto-v1';
+const CACHE = 'zresto-v2';
+const OFFLINE_URL = '/offline';
 
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => {
+      return cache.addAll([
+        '/',
+        '/pos',
+        '/offline',
+        '/icon.svg'
+      ]).catch(() => {
+        // Ignore cache errors during install
+      });
+    })
+  );
   self.skipWaiting();
 });
 
@@ -46,6 +59,43 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() => {
+        return caches.match(e.request).then((cached) => {
+          if (cached) return cached;
+          // Fallback ke offline page untuk navigasi
+          if (e.request.mode === 'navigate') {
+            return caches.match(OFFLINE_URL);
+          }
+          return new Response('Offline', { status: 503 });
+        });
+      })
+  );
+});
+
+// Handle push notification
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || 'Z-Resto';
+  const options = {
+    body: data.body || 'Ada pesanan baru!',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    vibrate: [100, 50, 100],
+    data: data.url || '/orders',
+    actions: [
+      { action: 'open', title: 'Lihat', icon: '/icon.svg' },
+      { action: 'dismiss', title: 'Tutup', icon: '/icon.svg' }
+    ]
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Handle notification click
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'dismiss') return;
+  
+  event.waitUntil(
+    clients.openWindow(event.notification.data || '/orders')
   );
 });

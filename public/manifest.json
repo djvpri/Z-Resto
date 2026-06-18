@@ -1,13 +1,17 @@
 {
-  "name": "Z-Resto",
+  "name": "Z-Resto - Sistem Manajemen Restoran",
   "short_name": "Z-Resto",
-  "description": "Sistem Manajemen Restoran",
+  "description": "Sistem manajemen rumah makan franchise - kasir, menu, order, dan laporan",
   "start_url": "/pos",
   "display": "standalone",
   "background_color": "#f9fafb",
   "theme_color": "#059669",
   "orientation": "any",
   "categories": ["food", "business"],
+  "scope": "/",
+  "lang": "id",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon.svg",
@@ -24,14 +28,52 @@
   ],
   "shortcuts": [
     {
-      "name": "POS Kasir",
+      "name": "Kasir POS",
+      "short_name": "Kasir",
       "url": "/pos",
-      "description": "Buka kasir langsung"
+      "description": "Buka kasir langsung",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
     },
     {
       "name": "Riwayat Order",
+      "short_name": "Order",
       "url": "/orders",
-      "description": "Lihat riwayat order"
+      "description": "Lihat riwayat order",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Menu",
+      "short_name": "Menu",
+      "url": "/menu",
+      "description": "Manajemen menu",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Laporan",
+      "short_name": "Laporan",
+      "url": "/reports",
+      "description": "Lihat laporan harian",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any"
+        }
+      ]
     }
   ]
 }
