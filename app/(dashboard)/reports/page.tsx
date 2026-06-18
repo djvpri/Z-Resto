@@ -14,6 +14,18 @@ export default function ReportsPage() {
   const [date, setDate] = useState(today);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.user?.role === "CASHIER") {
+          setForbidden(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +62,17 @@ export default function ReportsPage() {
       textColor: "text-purple-700",
     },
   ];
+
+  if (forbidden) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-20">
+          <div className="text-4xl mb-3">🔒</div>
+          <p className="text-gray-500 text-sm">Anda tidak memiliki akses ke halaman ini</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

@@ -15,7 +15,7 @@ const NAV = [
   { href: "/shift", label: "Shift Kasir", emoji: "🕐", roles: ["OWNER", "MANAGER", "CASHIER"] },
   { href: "/menu", label: "Kelola Menu", emoji: "🍽️", roles: ["OWNER", "MANAGER"] },
   { href: "/reports", label: "Laporan", emoji: "📊", roles: ["OWNER", "MANAGER"] },
-  { href: "/staff", label: "Kelola Staf", emoji: "👥", roles: ["OWNER", "MANAGER"] },
+  { href: "/staff", label: "Kelola Staf", emoji: "👥", roles: ["OWNER"] },
   { href: "/overview", label: "HQ Dashboard", emoji: "🏢", roles: ["OWNER"] },
   { href: "/branches", label: "Kelola Cabang", emoji: "🏬", roles: ["OWNER"] },
   { href: "/settings", label: "Pengaturan", emoji: "⚙️", roles: ["OWNER"] },

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role === "CASHIER") return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || new Date().toISOString().slice(0, 10);

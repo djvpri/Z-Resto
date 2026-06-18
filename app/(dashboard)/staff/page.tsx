@@ -29,6 +29,7 @@ export default function StaffPage() {
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -49,7 +50,16 @@ export default function StaffPage() {
   }
 
   useEffect(() => {
-    loadData();
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.user?.role !== "OWNER") {
+          setForbidden(true);
+        } else {
+          loadData();
+        }
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
@@ -112,6 +122,17 @@ export default function StaffPage() {
   }
 
   const staffOnly = users.filter((u) => u.role !== "OWNER");
+
+  if (forbidden) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-20">
+          <div className="text-4xl mb-3">🔒</div>
+          <p className="text-gray-500 text-sm">Anda tidak memiliki akses ke halaman ini</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
