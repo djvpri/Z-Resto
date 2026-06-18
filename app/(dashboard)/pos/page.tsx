@@ -341,14 +341,17 @@ export default function POSPage() {
 
       if (payRes.ok) {
         const d = await payRes.json();
+        const selectedTable = tables.find((t) => t.id === tableId);
+
+        // Tampilkan struk dengan detail semua item
         setReceipt({
           orderNumber: d.orderNumbers.join(", "),
           paidAt: new Date().toISOString(),
           paymentMethod,
-          tableNumber: tables.find((t) => t.id === tableId)?.number ?? null,
-          items: [{ name: `${d.totalOrders} order digabung`, quantity: 1, unitPrice: d.totalAmount, subtotal: d.totalAmount }],
-          subtotal: d.totalAmount,
-          taxAmount: 0,
+          tableNumber: selectedTable?.number ?? null,
+          items: d.items || [],
+          subtotal: d.totalSubtotal || d.totalAmount,
+          taxAmount: d.totalTax || 0,
           totalAmount: d.totalAmount,
           taxRate,
           tenantName,

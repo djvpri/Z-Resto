@@ -75,14 +75,34 @@ export async function PATCH(
       },
     });
 
-    // Hitung total gabungan
+    // Gabungkan semua item dari semua order
+    const allItems: { name: string; quantity: number; unitPrice: number; subtotal: number }[] = [];
+    let totalSubtotal = 0;
+    let totalTax = 0;
+
+    for (const o of pendingOrders) {
+      for (const item of o.items) {
+        allItems.push({
+          name: item.menuItem.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          subtotal: item.subtotal,
+        });
+      }
+      totalSubtotal += o.subtotal;
+      totalTax += o.taxAmount;
+    }
+
     const totalAll = pendingOrders.reduce((s, o) => s + o.totalAmount, 0);
 
     return Response.json({
       paid: true,
       totalOrders: pendingOrders.length,
       totalAmount: totalAll,
+      totalSubtotal,
+      totalTax,
       orderNumbers: pendingOrders.map((o) => o.orderNumber),
+      items: allItems,
     });
   }
 
