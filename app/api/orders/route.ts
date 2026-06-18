@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
   const user = await getSession(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { tableId, items, notes, paymentMethod } = await req.json();
+  const { tableId, items, notes, paymentMethod, paidAmount } = await req.json();
 
-  // Owner might not have branchId — fallback to first branch of tenant
+  // Owner tanpa branchId → ambil cabang pertama
   let branchId: string | null = user.branchId ?? null;
   if (!branchId) {
     const firstBranch = await prisma.branch.findFirst({
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     branchId = firstBranch?.id ?? null;
   }
   if (!branchId) {
-    return Response.json({ error: "Tidak ada cabang. Buat cabang dulu di menu Kelola Cabang." }, { status: 400 });
+    return Response.json({ error: "Tidak ada cabang. Buat cabang dulu." }, { status: 400 });
   }
 
   const subtotal = items.reduce(
@@ -56,7 +56,51 @@ export async function POST(req: NextRequest) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
   const orderNumber = generateOrderNumber(branch?.city?.slice(0, 3) || "RST");
 
-  const order = await prisma.order.create({
+  // Jika ada tableId, cek order PENDING yang sudah ada
+  let order;
+  if (tableId) {
+    const existingPending = await prisma.order.findFirst({
+      where: { branchId, tableId, status: "PENDING" },
+      include: { items: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingPending) {
+      // Tambah item ke order yang sudah ada
+      const newSubtotal = existingPending.subtotal + subtotal;
+      const newTaxAmount = Math.round(newSubtotal * taxRate);
+      const newTotalAmount = newSubtotal + newTaxAmount;
+
+      // Buat order items baru
+      await prisma.orderItem.createMany({
+        data: items.map((i: { menuItemId: string; quantity: number; unitPrice: number; notes?: string }) => ({
+          orderId: existingPending.id,
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          subtotal: i.unitPrice * i.quantity,
+          notes: i.notes,
+        })),
+      });
+
+      // Update total order
+      order = await prisma.order.update({
+        where: { id: existingPending.id },
+        data: {
+          subtotal: newSubtotal,
+          taxAmount: newTaxAmount,
+          totalAmount: newTotalAmount,
+          notes: notes || existingPending.notes,
+        },
+        include: { items: { include: { menuItem: true } } },
+      });
+
+      return Response.json({ order, added: true }, { status: 200 });
+    }
+  }
+
+  // Buat order baru (status PENDING)
+  order = await prisma.order.create({
     data: {
       branchId,
       cashierId: user.id,
@@ -65,10 +109,9 @@ export async function POST(req: NextRequest) {
       subtotal,
       taxAmount,
       totalAmount,
-      paymentMethod,
+      paymentMethod: paymentMethod || null,
       notes,
-      status: "COMPLETED",
-      paidAt: new Date(),
+      status: "PENDING",
       items: {
         create: items.map((i: { menuItemId: string; quantity: number; unitPrice: number; notes?: string }) => ({
           menuItemId: i.menuItemId,
@@ -82,5 +125,5 @@ export async function POST(req: NextRequest) {
     include: { items: { include: { menuItem: true } } },
   });
 
-  return Response.json({ order }, { status: 201 });
+  return Response.json({ order, added: false }, { status: 201 });
 }

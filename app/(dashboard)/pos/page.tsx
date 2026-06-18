@@ -239,7 +239,7 @@ export default function POSPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tableId,
-          paymentMethod,
+          paymentMethod: tableId ? null : paymentMethod,
           notes: orderNotes,
           paidAmount: paymentMethod === "CASH" ? Number(paidAmount) : total(),
           items: items.map((i) => ({
@@ -259,34 +259,122 @@ export default function POSPage() {
       const order = data.order;
       const selectedTable = tables.find((t) => t.id === tableId);
 
-      const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
-
-      setReceipt({
-        orderNumber: order.orderNumber,
-        paidAt: order.paidAt,
-        paymentMethod: order.paymentMethod,
-        tableNumber: selectedTable?.number ?? null,
-        items: order.items.map(
-          (i: { menuItem: { name: string }; quantity: number; unitPrice: number; subtotal: number }) => ({
-            name: i.menuItem.name,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            subtotal: i.subtotal,
-          })
-        ),
-        subtotal: order.subtotal,
-        taxAmount: order.taxAmount,
-        totalAmount: order.totalAmount,
-        taxRate,
-        tenantName,
-        notes: order.notes,
-        paidAmount: paymentMethod === "CASH" ? Number(paidAmount) : order.totalAmount,
-        change: changeAmount,
-      });
+      // Jika meja (order bertahap) — tampilkan notifikasi saja
+      if (tableId) {
+        setReceipt({
+          orderNumber: order.orderNumber,
+          paidAt: new Date().toISOString(),
+          paymentMethod: "-",
+          tableNumber: selectedTable?.number ?? null,
+          items: order.items.map(
+            (i: { menuItem: { name: string }; quantity: number; unitPrice: number; subtotal: number }) => ({
+              name: i.menuItem.name,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              subtotal: i.subtotal,
+            })
+          ),
+          subtotal: order.subtotal,
+          taxAmount: order.taxAmount,
+          totalAmount: order.totalAmount,
+          taxRate,
+          tenantName,
+          notes: order.notes,
+        });
+      } else {
+        // Takeaway — langsung bayar
+        const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
+        setReceipt({
+          orderNumber: order.orderNumber,
+          paidAt: order.paidAt,
+          paymentMethod: order.paymentMethod,
+          tableNumber: selectedTable?.number ?? null,
+          items: order.items.map(
+            (i: { menuItem: { name: string }; quantity: number; unitPrice: number; subtotal: number }) => ({
+              name: i.menuItem.name,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              subtotal: i.subtotal,
+            })
+          ),
+          subtotal: order.subtotal,
+          taxAmount: order.taxAmount,
+          totalAmount: order.totalAmount,
+          taxRate,
+          tenantName,
+          notes: order.notes,
+          paidAmount: paymentMethod === "CASH" ? Number(paidAmount) : order.totalAmount,
+          change: changeAmount,
+        });
+      }
 
       clearCart();
       setOrderNotes("");
       setPaidAmount("");
+      refreshTables();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function payOrder(orderId: string) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "pay",
+          paymentMethod,
+        }),
+      });
+      if (res.ok) {
+        setReceipt(null);
+        refreshTables();
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function payAllTable() {
+    if (!tableId) return;
+    setLoading(true);
+    try {
+      // Cari order PENDING di meja ini
+      const ordersRes = await fetch(`/api/orders?tableId=${tableId}`);
+      const ordersData = await ordersRes.json();
+      const pendingOrders = ordersData.orders?.filter((o: any) => o.status === "PENDING") || [];
+
+      if (pendingOrders.length === 0) {
+        setError("Tidak ada order yang perlu dibayar");
+        return;
+      }
+
+      // Bayar semua
+      const payRes = await fetch(`/api/orders/${pendingOrders[0].id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "payAll", paymentMethod }),
+      });
+
+      if (payRes.ok) {
+        const d = await payRes.json();
+        setReceipt({
+          orderNumber: d.orderNumbers.join(", "),
+          paidAt: new Date().toISOString(),
+          paymentMethod,
+          tableNumber: tables.find((t) => t.id === tableId)?.number ?? null,
+          items: [{ name: `${d.totalOrders} order digabung`, quantity: 1, unitPrice: d.totalAmount, subtotal: d.totalAmount }],
+          subtotal: d.totalAmount,
+          taxAmount: 0,
+          totalAmount: d.totalAmount,
+          taxRate,
+          tenantName,
+        });
+        clearCart();
+        refreshTables();
+      }
     } finally {
       setLoading(false);
     }
@@ -597,13 +685,32 @@ export default function POSPage() {
             )}
 
             {/* Place order */}
-            <button
-              onClick={placeOrder}
-              disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
-              className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-            >
-              {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
-            </button>
+            {tableId ? (
+              <div className="space-y-2">
+                <button
+                  onClick={placeOrder}
+                  disabled={loading || items.length === 0}
+                  className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
+                </button>
+                <button
+                  onClick={payAllTable}
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
+                >
+                  {loading ? "Memproses..." : `💳 Bayar Semua`}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={placeOrder}
+                disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
+                className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              >
+                {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
+              </button>
+            )}
           </div>
         </div>
           </>
@@ -1035,13 +1142,32 @@ export default function POSPage() {
               )}
 
               {/* Place order */}
-              <button
-                onClick={placeOrder}
-                disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
-                className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
-              </button>
+              {tableId ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={placeOrder}
+                    disabled={loading || items.length === 0}
+                    className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {loading ? "Menyimpan..." : `📝 Simpan ke Meja (${formatRupiah(total())})`}
+                  </button>
+                  <button
+                    onClick={payAllTable}
+                    disabled={loading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-40 shadow-sm"
+                  >
+                    {loading ? "Memproses..." : `💳 Bayar Semua`}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={placeOrder}
+                  disabled={loading || items.length === 0 || (paymentMethod === "CASH" && (!paidAmount || Number(paidAmount) < total()))}
+                  className="w-full bg-emerald-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {loading ? "Memproses..." : `Bayar ${formatRupiah(total())}`}
+                </button>
+              )}
             </div>
           </div>
         </div>
