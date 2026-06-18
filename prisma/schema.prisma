@@ -44,6 +44,7 @@ model Branch {
   shifts    Shift[]
   inventory InventoryItem[]
   tables    DiningTable[]
+  reservations Reservation[]
 
   @@index([tenantId])
 }
