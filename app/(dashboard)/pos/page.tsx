@@ -16,6 +16,10 @@ type DiningTable = {
   id: string;
   number: string;
   capacity: number;
+  status: string;
+  activeOrderCount: number;
+  activeOrderTotal: number;
+  firstOrderAt: string | null;
 };
 
 type ReceiptItem = {
@@ -71,9 +75,70 @@ export default function POSPage() {
   const [shiftLoading, setShiftLoading] = useState(false);
   const [paidAmount, setPaidAmount] = useState("");
   const [showCart, setShowCart] = useState(false);
+  const [view, setView] = useState<"menu" | "tables">("menu");
+  const [showTableDetail, setShowTableDetail] = useState<DiningTable | null>(null);
+  const [tableHistory, setTableHistory] = useState<any[]>([]);
 
-  const { items, tableId, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate } =
+  const { items, tableId, tableInfo, addItem, updateQty, clearCart, setTable, setNotes, setTaxRate, subtotal, tax, total, taxRate, activeOrderId, setActiveOrderId } =
     useCartStore();
+
+  function tableDuration(firstOrderAt: string | null) {
+    if (!firstOrderAt) return null;
+    const ms = Date.now() - new Date(firstOrderAt).getTime();
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    if (h > 0) return `${h}j ${m}m`;
+    if (m > 0) return `${m}m ${s}d`;
+    return `${s}d`;
+  }
+
+  function handleSelectTable(table: DiningTable) {
+    if (table.status === "OCCUPIED" && table.activeOrderCount > 0) {
+      setShowTableDetail(table);
+    } else {
+      setTable(table.id, table);
+      setView("menu");
+      setShowCart(true);
+    }
+  }
+
+  function handleTableHistory(table: DiningTable) {
+    fetch(`/api/orders?tableId=${table.id}&status=active`)
+      .then(r => r.json())
+      .then(d => {
+        setTableHistory(d.orders || []);
+        setShowTableDetail(table);
+      });
+  }
+
+  async function continueOrder(table: DiningTable) {
+    // Load order items dari server
+    const res = await fetch(`/api/orders?tableId=${table.id}&status=active`);
+    const d = await res.json();
+    if (d.orders && d.orders.length > 0) {
+      const order = d.orders[0];
+      // Set table di cart
+      setTable(table.id, table);
+      setActiveOrderId(order.id);
+      // Clear cart dulu, nanti user tambah menu baru
+      clearCart();
+      setTable(table.id, table);
+      setView("menu");
+      setShowCart(true);
+      setShowTableDetail(null);
+    }
+  }
+
+  function startNewOrder(table: DiningTable) {
+    setTable(table.id, table);
+    setActiveOrderId(null);
+    clearCart();
+    setTable(table.id, table);
+    setView("menu");
+    setShowCart(true);
+    setShowTableDetail(null);
+  }
 
   useEffect(() => {
     fetch("/api/menu")
@@ -234,61 +299,85 @@ export default function POSPage() {
         )}
       </button>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: Menu */}
-        <div className="flex-1 flex flex-col overflow-hidden p-3 lg:p-4 gap-2 lg:gap-3">
-          {/* Category tabs */}
-          <div className="flex gap-1.5 lg:gap-2 overflow-x-auto pb-1 shrink-0">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-2.5 lg:px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
-                  activeCategory === cat
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+      {/* View toggle: Menu | Meja */}
+      <div className="flex border-b border-gray-100 shrink-0">
+        <button
+          onClick={() => setView("menu")}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            view === "menu" ? "text-emerald-600 border-b-2 border-emerald-600" : "text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          🍽️ Menu
+        </button>
+        <button
+          onClick={() => setView("tables")}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            view === "tables" ? "text-emerald-600 border-b-2 border-emerald-600" : "text-gray-400 hover:text-gray-600"
+          }`}
+        >
+          🪑 Meja
+        </button>
+      </div>
 
-          {/* Menu grid */}
-          <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 lg:gap-2.5 content-start">
-            {filtered.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => addItem({ menuItemId: item.id, name: item.name, price: item.price })}
-                className="bg-white rounded-xl border border-gray-100 p-2 lg:p-3 text-left hover:border-emerald-400 hover:shadow-md active:scale-[0.97] transition-all"
-              >
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="rounded-lg h-12 lg:h-14 w-full object-cover mb-2"
-                  />
-                ) : (
-                  <div className="bg-emerald-50 rounded-lg h-12 lg:h-14 flex items-center justify-center text-xl lg:text-2xl mb-2">
-                    🍽️
+      <div className="flex flex-1 overflow-hidden">
+        {/* VIEW: MENU */}
+        {view === "menu" && (
+          <>
+            {/* Left: Menu */}
+            <div className="flex-1 flex flex-col overflow-hidden p-3 lg:p-4 gap-2 lg:gap-3">
+              {/* Category tabs */}
+              <div className="flex gap-1.5 lg:gap-2 overflow-x-auto pb-1 shrink-0">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-2.5 lg:px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium whitespace-nowrap shrink-0 transition-colors ${
+                      activeCategory === cat
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Menu grid */}
+              <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 lg:gap-2.5 content-start">
+                {filtered.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => addItem({ menuItemId: item.id, name: item.name, price: item.price })}
+                    className="bg-white rounded-xl border border-gray-100 p-2 lg:p-3 text-left hover:border-emerald-400 hover:shadow-md active:scale-[0.97] transition-all"
+                  >
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="rounded-lg h-12 lg:h-14 w-full object-cover mb-2"
+                      />
+                    ) : (
+                      <div className="bg-emerald-50 rounded-lg h-12 lg:h-14 flex items-center justify-center text-xl lg:text-2xl mb-2">
+                        🍽️
+                      </div>
+                    )}
+                    <div className="text-[10px] lg:text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
+                      {item.name}
+                    </div>
+                    <div className="text-emerald-600 font-bold text-[10px] lg:text-xs mt-1 lg:mt-1.5">{formatRupiah(item.price)}</div>
+                  </button>
+                ))}
+                {filtered.length === 0 && (
+                  <div className="col-span-full text-center text-gray-400 text-sm py-16">
+                    Tidak ada menu untuk kategori ini
                   </div>
                 )}
-                <div className="text-[10px] lg:text-xs font-semibold text-gray-800 line-clamp-2 leading-tight">
-                  {item.name}
-                </div>
-                <div className="text-emerald-600 font-bold text-[10px] lg:text-xs mt-1 lg:mt-1.5">{formatRupiah(item.price)}</div>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <div className="col-span-full text-center text-gray-400 text-sm py-16">
-                Tidak ada menu untuk kategori ini
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Right: Cart - Desktop (side panel) */}
-        <div className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col shrink-0">
+            {/* Right: Cart - Desktop (side panel) */}
+            <div className="hidden lg:flex w-72 bg-white border-l border-gray-100 flex-col shrink-0">
+
           {/* Cart header */}
           <div className="p-4 border-b border-gray-100">
             <div className="flex items-center justify-between mb-3">
@@ -302,18 +391,43 @@ export default function POSPage() {
                 </button>
               )}
             </div>
-            <select
-              value={tableId || ""}
-              onChange={(e) => setTable(e.target.value || null)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">🥡 Takeaway</option>
-              {tables.map((t) => (
-                <option key={t.id} value={t.id}>
-                  🪑 Meja {t.number} ({t.capacity} orang)
-                </option>
-              ))}
-            </select>
+            {tableInfo ? (
+              <div className="bg-emerald-50 rounded-xl px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span>🪑</span>
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">Meja {tableInfo.number}</div>
+                    {tableInfo.status === "OCCUPIED" && tableInfo.activeOrderCount > 0 && (
+                      <div className="text-[10px] text-amber-600">
+                        {tableInfo.activeOrderCount} order aktif · {formatRupiah(tableInfo.activeOrderTotal)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setTable(null); setActiveOrderId(null); }}
+                  className="text-xs text-gray-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <select
+                value={tableId || ""}
+                onChange={(e) => {
+                  const t = tables.find((t) => t.id === e.target.value);
+                  setTable(e.target.value || null, t || null);
+                }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">🥡 Takeaway</option>
+                {tables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    🪑 Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "⚠️ Terisi" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Cart items */}
@@ -447,7 +561,124 @@ export default function POSPage() {
             </button>
           </div>
         </div>
+
+        {/* VIEW: TABLES */}
+        {view === "tables" && (
+          <div className="flex-1 p-4 overflow-y-auto">
+            {/* Legend */}
+            <div className="flex gap-4 mb-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                <span className="text-gray-600">Kosong</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <span className="text-gray-600">Terisi</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-400" />
+                <span className="text-gray-600">Reservasi</span>
+              </div>
+            </div>
+
+            {/* Table grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+              {tables.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleSelectTable(t)}
+                  className={`relative p-4 rounded-2xl border-2 transition-all active:scale-95 ${
+                    t.status === "OCCUPIED"
+                      ? "border-amber-300 bg-amber-50 hover:shadow-md"
+                      : t.status === "RESERVED"
+                      ? "border-red-300 bg-red-50 hover:shadow-md"
+                      : "border-emerald-200 bg-emerald-50 hover:border-emerald-400 hover:shadow-md"
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">
+                      {t.status === "OCCUPIED" ? "🍽️" : "🪑"}
+                    </div>
+                    <div className="font-bold text-sm text-gray-800">{t.number}</div>
+                    <div className="text-[10px] text-gray-500">{t.capacity} kursi</div>
+                    {t.status === "OCCUPIED" && (
+                      <div className="mt-2 space-y-0.5">
+                        <div className="text-[10px] font-medium text-amber-700">
+                          {t.activeOrderCount} order · {formatRupiah(t.activeOrderTotal)}
+                        </div>
+                        {t.firstOrderAt && (
+                          <div className="text-[10px] text-amber-600">
+                            ⏱️ {tableDuration(t.firstOrderAt)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {t.status === "AVAILABLE" && (
+                      <div className="text-[10px] text-emerald-600 mt-1">Siap</div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Table Detail Modal */}
+      {showTableDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50 p-0 lg:p-4">
+          <div className="bg-white rounded-t-2xl lg:rounded-2xl w-full max-w-sm shadow-xl max-h-[80vh] flex flex-col">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Meja {showTableDetail.number}</h2>
+                <p className="text-xs text-gray-500">{showTableDetail.capacity} kursi</p>
+              </div>
+              <button onClick={() => setShowTableDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              {showTableDetail.status === "OCCUPIED" ? (
+                <>
+                  <div className="bg-amber-50 rounded-xl p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Order Aktif</span>
+                      <span className="font-medium">{showTableDetail.activeOrderCount} order</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Total</span>
+                      <span className="font-bold text-amber-700">{formatRupiah(showTableDetail.activeOrderTotal)}</span>
+                    </div>
+                    {showTableDetail.firstOrderAt && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Durasi</span>
+                        <span>{tableDuration(showTableDetail.firstOrderAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => continueOrder(showTableDetail)}
+                    className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
+                  >
+                    ➕ Tambah Pesanan
+                  </button>
+                  <button
+                    onClick={() => startNewOrder(showTableDetail)}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
+                  >
+                    📝 Order Baru
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { startNewOrder(showTableDetail); }}
+                  className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
+                >
+                  🪑 Mulai Order di Meja Ini
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Cart - Slide up panel */}
       {showCart && (
@@ -489,18 +720,43 @@ export default function POSPage() {
 
             {/* Table selector */}
             <div className="px-4 pt-3 pb-2">
-              <select
-                value={tableId || ""}
-                onChange={(e) => setTable(e.target.value || null)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">🥡 Takeaway</option>
-                {tables.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    🪑 Meja {t.number} ({t.capacity} orang)
-                  </option>
-                ))}
-              </select>
+              {tableInfo ? (
+                <div className="bg-emerald-50 rounded-xl px-3 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>🪑</span>
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">Meja {tableInfo.number}</div>
+                      {tableInfo.status === "OCCUPIED" && tableInfo.activeOrderCount > 0 && (
+                        <div className="text-[10px] text-amber-600">
+                          {tableInfo.activeOrderCount} order aktif · {formatRupiah(tableInfo.activeOrderTotal)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setTable(null); setActiveOrderId(null); }}
+                    className="text-xs text-gray-400 hover:text-red-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={tableId || ""}
+                  onChange={(e) => {
+                    const t = tables.find((t) => t.id === e.target.value);
+                    setTable(e.target.value || null, t || null);
+                  }}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">🥡 Takeaway</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      🪑 Meja {t.number} ({t.capacity} orang) {t.status === "OCCUPIED" ? "⚠️ Terisi" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Cart items */}

@@ -1,14 +1,27 @@
 import { create } from "zustand";
 import { CartItem } from "@/types";
 
+interface TableInfo {
+  id: string;
+  number: string;
+  capacity: number;
+  status: string;
+  activeOrderCount: number;
+  activeOrderTotal: number;
+  firstOrderAt: string | null;
+}
+
 interface CartStore {
   items: CartItem[];
   tableId: string | null;
+  tableInfo: TableInfo | null;
   notes: string;
-  taxRate: number; // percentage, e.g. 10 = 10%
-  setTable: (tableId: string | null) => void;
+  taxRate: number;
+  activeOrderId: string | null;
+  setTable: (tableId: string | null, tableInfo?: TableInfo | null) => void;
   setNotes: (notes: string) => void;
   setTaxRate: (rate: number) => void;
+  setActiveOrderId: (orderId: string | null) => void;
   addItem: (item: Omit<CartItem, "quantity">) => void;
   removeItem: (menuItemId: string) => void;
   updateQty: (menuItemId: string, qty: number) => void;
@@ -21,12 +34,15 @@ interface CartStore {
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   tableId: null,
+  tableInfo: null,
   notes: "",
   taxRate: 10,
+  activeOrderId: null,
 
-  setTable: (tableId) => set({ tableId }),
+  setTable: (tableId, tableInfo = null) => set({ tableId, tableInfo }),
   setNotes: (notes) => set({ notes }),
   setTaxRate: (taxRate) => set({ taxRate }),
+  setActiveOrderId: (orderId) => set({ activeOrderId: orderId }),
 
   addItem: (item) => {
     const existing = get().items.find((i) => i.menuItemId === item.menuItemId);
@@ -56,7 +72,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }));
   },
 
-  clearCart: () => set({ items: [], tableId: null, notes: "" }),
+  clearCart: () => set({ items: [], tableId: null, tableInfo: null, notes: "", activeOrderId: null }),
 
   subtotal: () => get().items.reduce((s, i) => s + i.price * i.quantity, 0),
   tax: () => Math.round(get().subtotal() * (get().taxRate / 100)),
