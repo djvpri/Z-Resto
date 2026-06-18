@@ -90,6 +90,7 @@ export default function POSPage() {
   const [view, setView] = useState<"menu" | "tables">("menu");
   const [showTableDetail, setShowTableDetail] = useState<DiningTable | null>(null);
   const [tableHistory, setTableHistory] = useState<any[]>([]);
+  const [notification, setNotification] = useState<string | null>(null);
   const [showManageTables, setShowManageTables] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState("");
   const [newTableCapacity, setNewTableCapacity] = useState("4");
@@ -406,28 +407,11 @@ export default function POSPage() {
       const order = data.order;
       const selectedTable = tables.find((t) => t.id === tableId);
 
-      // Jika meja (order bertahap) — tampilkan notifikasi saja
+      // Jika meja (order bertahap) — notifikasi singkat saja, bukan struk
       if (tableId) {
-        setReceipt({
-          orderNumber: order.orderNumber,
-          paidAt: new Date().toISOString(),
-          paymentMethod: "-",
-          tableNumber: selectedTable?.number ?? null,
-          items: order.items.map(
-            (i: { menuItem: { name: string }; quantity: number; unitPrice: number; subtotal: number }) => ({
-              name: i.menuItem.name,
-              quantity: i.quantity,
-              unitPrice: i.unitPrice,
-              subtotal: i.subtotal,
-            })
-          ),
-          subtotal: order.subtotal,
-          taxAmount: order.taxAmount,
-          totalAmount: order.totalAmount,
-          taxRate,
-          tenantName,
-          notes: order.notes,
-        });
+        const msg = `✅ Tersimpan ke Meja ${selectedTable?.number || ""} (${order.orderNumber})`;
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 3000);
       } else {
         // Takeaway — langsung bayar
         const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
@@ -606,6 +590,13 @@ export default function POSPage() {
       {/* Main content (hidden while loading) */}
       {!initialLoading && (
         <>
+          {/* Notification toast */}
+          {notification && (
+            <div className="bg-emerald-600 text-white px-4 py-2.5 text-sm font-medium text-center shrink-0 animate-pulse">
+              {notification}
+            </div>
+          )}
+
           {/* Shift banner */}
       {!activeShift ? (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-between shrink-0">
