@@ -127,10 +127,30 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "deleteTenant") {
+      // Soft-delete: nonaktifkan tenant + semua usernya, BUKAN hapus baris.
+      // User punya relasi ke Order(cashier)/Shift tanpa cascade -> hapus
+      // permanen akan gagal kalau ada riwayat transaksi. Login Z-Resto cuma
+      // cek user.isActive (bukan tenant.isActive), jadi nonaktifkan usernya
+      // juga supaya akses beneran tertutup.
       const tenantId = data?.tenantId;
       if (!tenantId) return Response.json({ error: "tenantId wajib diisi" }, { status: 400 });
-      await prisma.tenant.delete({ where: { id: tenantId } });
-      return Response.json({ success: true });
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!tenant) return Response.json({ error: "Tenant tidak ditemukan" }, { status: 404 });
+      await prisma.$transaction([
+        prisma.tenant.update({ where: { id: tenantId }, data: { isActive: false } }),
+        prisma.user.updateMany({ where: { tenantId }, data: { isActive: false } }),
+      ]);
+      return Response.json({ success: true, deactivated: true });
+    }
+
+    if (action === "reactivateTenant") {
+      const tenantId = data?.tenantId;
+      if (!tenantId) return Response.json({ error: "tenantId wajib diisi" }, { status: 400 });
+      await prisma.$transaction([
+        prisma.tenant.update({ where: { id: tenantId }, data: { isActive: true } }),
+        prisma.user.updateMany({ where: { tenantId }, data: { isActive: true } }),
+      ]);
+      return Response.json({ success: true, reactivated: true });
     }
 
     if (action === "create") {
