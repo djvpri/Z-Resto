@@ -160,11 +160,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "delete") {
+      // Soft-delete: nonaktifkan, BUKAN hapus baris. User punya relasi ke Order
+      // (cashier) dan Shift tanpa cascade delete (sengaja, demi keutuhan riwayat
+      // transaksi) — hapus permanen akan gagal kalau user pernah transaksi/shift.
       if (!email) return Response.json({ error: "email wajib diisi" }, { status: 400 });
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) return Response.json({ error: "User tidak ditemukan" }, { status: 404 });
-      await prisma.user.delete({ where: { email } });
-      return Response.json({ success: true });
+      const result = await prisma.user.updateMany({ where: { email }, data: { isActive: false } });
+      if (!result.count) return Response.json({ error: "User tidak ditemukan" }, { status: 404 });
+      return Response.json({ success: true, deactivated: true });
+    }
+
+    if (action === "reactivate") {
+      if (!email) return Response.json({ error: "email wajib diisi" }, { status: 400 });
+      const result = await prisma.user.updateMany({ where: { email }, data: { isActive: true } });
+      if (!result.count) return Response.json({ error: "User tidak ditemukan" }, { status: 404 });
+      return Response.json({ success: true, reactivated: true });
     }
 
     return Response.json({ error: "Unknown action" }, { status: 400 });
