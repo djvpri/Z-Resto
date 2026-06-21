@@ -6,6 +6,7 @@ const PUBLIC_PATHS = [
   "/register",
   "/api/auth/login",
   "/api/register",
+  "/api/admin/cross-app", // autentikasi sendiri via Bearer CROSS_APP_SECRET, bukan cookie sesi
 ];
 
 export function middleware(req: NextRequest) {
