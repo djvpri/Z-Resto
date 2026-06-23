@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useCartStore } from "@/stores/cart";
 import { formatRupiah } from "@/lib/format";
 import { cachedFetch, invalidateCache } from "@/lib/cached-fetch";
+import { buildEscPos, printViaBluetooth, isBluetoothSupported, PrintStatus } from "@/lib/thermal-print";
 
 type MenuItem = {
   id: string;
@@ -81,6 +82,8 @@ export default function POSPage() {
   const [error, setError] = useState("");
   const [tenantName, setTenantName] = useState("Z-Resto");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [btStatus, setBtStatus] = useState<PrintStatus>('idle');
+  const [btMsg, setBtMsg] = useState('');
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
@@ -519,6 +522,35 @@ export default function POSPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  const cetakBluetooth = async () => {
+    if (!receipt) return
+    const waktu = new Date(receipt.paidAt).toLocaleString('id-ID', {
+      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+    const escPos = buildEscPos({
+      namaToko: receipt.tenantName,
+      waktu,
+      noTransaksi: receipt.orderNumber,
+      items: receipt.items.map((it: any) => ({
+        nama: it.name,
+        qty: it.quantity,
+        harga: it.unitPrice,
+      })),
+      subtotal: receipt.subtotal,
+      pajak: receipt.taxAmount,
+      pajakPersen: receipt.taxRate,
+      total: receipt.totalAmount,
+      bayar: receipt.paidAmount ?? receipt.totalAmount,
+      kembali: receipt.change ?? 0,
+      metodeBayar: receipt.paymentMethod,
+      catatan: receipt.notes,
+    })
+    await printViaBluetooth(escPos, (status, msg) => {
+      setBtStatus(status)
+      setBtMsg(msg || '')
+    })
   }
 
   return (
@@ -1846,19 +1878,38 @@ export default function POSPage() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-2 p-4 border-t border-gray-100">
-              <button
-                onClick={() => setReceipt(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
-              >
-                Tutup
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
-              >
-                🖨️ Cetak
-              </button>
+            <div className="flex flex-col gap-2 p-4 border-t border-gray-100">
+              {isBluetoothSupported() && (
+                <button
+                  onClick={cetakBluetooth}
+                  disabled={btStatus === 'connecting' || btStatus === 'printing'}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  {btStatus === 'connecting' ? '🔵 Menghubungkan...' :
+                   btStatus === 'printing' ? '🔵 Mencetak...' :
+                   btStatus === 'done' ? '✓ Berhasil Dicetak!' :
+                   '🖨️ Cetak Bluetooth'}
+                </button>
+              )}
+              {btMsg && (
+                <p className={`text-xs text-center ${btStatus === 'error' ? 'text-red-500' : btStatus === 'done' ? 'text-green-600' : 'text-gray-500'}`}>
+                  {btMsg}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setReceipt(null); setBtStatus('idle'); setBtMsg('') }}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
+                >
+                  🖨️ Cetak
+                </button>
+              </div>
             </div>
           </div>
         </div>
