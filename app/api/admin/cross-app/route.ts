@@ -189,6 +189,15 @@ export async function POST(req: NextRequest) {
       return Response.json({ success: true, deactivated: true });
     }
 
+    if (action === "moveTenant") {
+      const userId = data?.userId
+      const tenantId = data?.tenantId
+      if (!userId || !tenantId) return Response.json({ error: "userId dan tenantId wajib diisi" }, { status: 400 })
+      const result = await prisma.user.updateMany({ where: { id: userId }, data: { tenantId } })
+      if (!result.count) return Response.json({ error: "User tidak ditemukan" }, { status: 404 })
+      return Response.json({ success: true })
+    }
+
     if (action === "reactivate") {
       if (!email) return Response.json({ error: "email wajib diisi" }, { status: 400 });
       const result = await prisma.user.updateMany({ where: { email }, data: { isActive: true } });
