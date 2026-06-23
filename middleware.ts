@@ -5,6 +5,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/register",
   "/api/auth/login",
+  "/api/auth/sso-verify", // endpoint SSO dari Z One
   "/api/register",
   "/api/admin/cross-app",
   "/sso", // halaman landing SSO dari Z One
