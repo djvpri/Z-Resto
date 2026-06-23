@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useCartStore } from "@/stores/cart";
 import { formatRupiah } from "@/lib/format";
 import { cachedFetch, invalidateCache } from "@/lib/cached-fetch";
-import { buildEscPos, printViaBluetooth, isBluetoothSupported, PrintStatus } from "@/lib/thermal-print";
+import { buildEscPos, printViaBluetooth, isBluetoothSupported, selectPrinter, getSavedPrinterName, PrintStatus } from "@/lib/thermal-print";
 
 type MenuItem = {
   id: string;
@@ -84,6 +84,11 @@ export default function POSPage() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [btStatus, setBtStatus] = useState<PrintStatus>('idle');
   const [btMsg, setBtMsg] = useState('');
+  const [savedPrinter, setSavedPrinter] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSavedPrinterName().then(name => setSavedPrinter(name));
+  }, []);
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [showOpenShift, setShowOpenShift] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
@@ -1880,16 +1885,32 @@ export default function POSPage() {
             {/* Action buttons */}
             <div className="flex flex-col gap-2 p-4 border-t border-gray-100">
               {isBluetoothSupported() && (
-                <button
-                  onClick={cetakBluetooth}
-                  disabled={btStatus === 'connecting' || btStatus === 'printing'}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
-                >
-                  {btStatus === 'connecting' ? '🔵 Menghubungkan...' :
-                   btStatus === 'printing' ? '🔵 Mencetak...' :
-                   btStatus === 'done' ? '✓ Berhasil Dicetak!' :
-                   '🖨️ Cetak Bluetooth'}
-                </button>
+                <div className="space-y-1">
+                  <button
+                    onClick={cetakBluetooth}
+                    disabled={btStatus === 'connecting' || btStatus === 'printing'}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    {btStatus === 'connecting' ? '🔵 Menghubungkan...' :
+                     btStatus === 'printing' ? '🔵 Mencetak...' :
+                     btStatus === 'done' ? '✓ Berhasil Dicetak!' :
+                     savedPrinter ? `🖨️ Cetak ke ${savedPrinter}` : '🖨️ Cetak Bluetooth'}
+                  </button>
+                  <div className="flex items-center justify-between px-1">
+                    {savedPrinter
+                      ? <span className="text-[10px] text-gray-400">🔵 {savedPrinter}</span>
+                      : <span className="text-[10px] text-gray-400">Belum ada printer tersimpan</span>
+                    }
+                    <button
+                      onClick={async () => {
+                        const name = await selectPrinter()
+                        if (name) setSavedPrinter(name)
+                      }}
+                      className="text-[10px] text-blue-500 underline">
+                      Ganti Printer
+                    </button>
+                  </div>
+                </div>
               )}
               {btMsg && (
                 <p className={`text-xs text-center ${btStatus === 'error' ? 'text-red-500' : btStatus === 'done' ? 'text-green-600' : 'text-gray-500'}`}>
