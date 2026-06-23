@@ -133,10 +133,13 @@ export async function PATCH(
     return Response.json({ order: updated });
   }
 
-  // Action: CANCEL — cashier bisa batal order sendiri
+  // Action: CANCEL — OWNER/MANAGER bisa batalkan order siapapun, CASHIER hanya milik sendiri
   if (action === "cancel") {
     if (order.status === "CANCELLED") {
       return Response.json({ error: "Order sudah dibatalkan" }, { status: 400 });
+    }
+    if (order.status === "COMPLETED") {
+      return Response.json({ error: "Order yang sudah selesai tidak bisa dibatalkan" }, { status: 400 });
     }
     if (user.role === "CASHIER") {
       if (order.cashierId !== user.id) {
@@ -146,6 +149,7 @@ export async function PATCH(
         return Response.json({ error: "Order sudah diproses, tidak bisa dibatalkan" }, { status: 400 });
       }
     }
+    // OWNER/MANAGER/ADMIN: bisa batalkan order siapapun tanpa batasan
 
     const updated = await prisma.order.update({
       where: { id },
