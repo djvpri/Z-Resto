@@ -24,7 +24,7 @@ function SsoContent() {
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          router.replace(d.redirect || '/pos')
+          window.location.replace('https://zresto.zomet.my.id' + (d.redirect || '/pos'))
         } else {
           setStatus('error')
           setMsg(d.error || 'Login SSO gagal')
