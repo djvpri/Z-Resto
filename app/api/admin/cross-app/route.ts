@@ -38,7 +38,6 @@ async function buildCrossAppData() {
   });
 
   const users = await prisma.user.findMany({
-    where: { tenant: { slug: { not: "system" } } },
     select: { id: true, name: true, email: true, role: true, tenantId: true, isActive: true },
     orderBy: { createdAt: "desc" },
   });
