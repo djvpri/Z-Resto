@@ -6,7 +6,8 @@ const PUBLIC_PATHS = [
   "/register",
   "/api/auth/login",
   "/api/register",
-  "/api/admin/cross-app", // autentikasi sendiri via Bearer CROSS_APP_SECRET, bukan cookie sesi
+  "/api/admin/cross-app",
+  "/sso", // halaman landing SSO dari Z One
 ];
 
 export function middleware(req: NextRequest) {
