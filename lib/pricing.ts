@@ -6,15 +6,15 @@ export const PRICING = {
   },
   MONTHLY: {
     days: 30,
-    amount: 50000,
+    amount: 100000,
     label: "Bulanan",
-    perMonth: 50000,
+    perMonth: 100000,
   },
   YEARLY: {
     days: 365,
-    amount: 500000,
+    amount: 1000000,
     label: "Tahunan",
-    perMonth: 41667, // ~Rp 41rb/bulan
+    perMonth: 83334, // ~Rp 83rb/bulan
     savePercent: 17,
   },
 } as const;
