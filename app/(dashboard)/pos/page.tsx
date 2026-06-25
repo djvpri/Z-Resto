@@ -425,7 +425,9 @@ export default function POSPage() {
         const changeAmount = paymentMethod === "CASH" ? Number(paidAmount) - order.totalAmount : 0;
         setReceipt({
           orderNumber: order.orderNumber,
-          paidAt: order.paidAt,
+          paidAt: order.paidAt && new Date(order.paidAt).getFullYear() > 1970
+            ? order.paidAt
+            : new Date().toISOString(),
           paymentMethod: order.paymentMethod,
           tableNumber: selectedTable?.number ?? null,
           items: order.items.map(
