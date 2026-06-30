@@ -190,8 +190,11 @@ export async function POST(req: NextRequest) {
 
     if (action === "updateRole") {
       const userEmail = data?.email || email
-      const role = String(data?.role || '').toUpperCase()
-      const validRoles = ['CASHIER', 'OWNER', 'MANAGER', 'ADMIN']
+      let role = String(data?.role || '').toUpperCase()
+      // Z-Resto tak punya peran "ADMIN"; peran tertinggi (akses semua cabang) = OWNER.
+      // Z One mengirim role generik "admin" -> petakan ke OWNER.
+      if (role === 'ADMIN') role = 'OWNER'
+      const validRoles = ['SUPERADMIN', 'OWNER', 'MANAGER', 'CASHIER']
       if (!userEmail || !role) return Response.json({ error: "email dan role wajib diisi" }, { status: 400 })
       if (!validRoles.includes(role)) return Response.json({ error: `Role tidak valid. Pilih: ${validRoles.join(', ')}` }, { status: 400 })
       const result = await prisma.user.updateMany({ where: { email: userEmail }, data: { role: role as any } })
