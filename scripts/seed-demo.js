@@ -64,7 +64,8 @@ async function main() {
   console.log(`Target: ${tenant.name} / cabang ${branch.name} | kasir ${cashier.name} | pajak ${tenant.taxRate}%`)
 
   const branches = await prisma.branch.findMany({ where: { tenantId }, select: { id: true } })
-  const branchIds = branches.map((b) => b.id)
+  // Pastikan cabang target ikut terbersihkan walau tenantId-nya tak konsisten.
+  const branchIds = Array.from(new Set([branch.id, ...branches.map((b) => b.id)]))
 
   // 2. RESET (order cascade ke orderItem)
   await prisma.order.deleteMany({ where: { branchId: { in: branchIds } } })
@@ -91,8 +92,11 @@ async function main() {
   // 4. Meja
   const tables = []
   for (let i = 1; i <= 8; i++) {
-    tables.push(await prisma.diningTable.create({
-      data: { branchId: branch.id, number: String(i), capacity: pick([2, 4, 4, 6]) },
+    const cap = pick([2, 4, 4, 6])
+    tables.push(await prisma.diningTable.upsert({
+      where: { branchId_number: { branchId: branch.id, number: String(i) } },
+      update: { capacity: cap, status: 'AVAILABLE' },
+      create: { branchId: branch.id, number: String(i), capacity: cap },
     }))
   }
 
