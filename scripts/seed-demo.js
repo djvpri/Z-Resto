@@ -8,7 +8,14 @@
 // reset:  node scripts/seed-demo.js
 
 const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+const { PrismaPg } = require('@prisma/adapter-pg')
+const { Pool } = require('pg')
+
+// ZResto pakai Prisma 7 + driver adapter (skema tanpa `url`), jadi koneksi
+// dibuat lewat adapter pg seperti prisma/seed.ts & lib/prisma.ts.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
 
 const DEMO_EMAIL = process.env.DEMO_EMAIL || 'demo@zomet.my.id'
 const DEMO_SLUG = process.env.DEMO_SLUG || 'demo'
