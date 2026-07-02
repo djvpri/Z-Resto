@@ -7,7 +7,16 @@ import { PRICING, getSubscriptionEndDate } from "@/lib/pricing";
 // browser pengguna langsung — makanya autentikasinya pakai Bearer secret
 // (CROSS_APP_SECRET), bukan session cookie biasa.
 
-const CROSS_APP_SECRET = process.env.CROSS_APP_SECRET || "z-ecosystem-admin-2026";
+// Migration 2026-07-02: Dual secret support during transition
+const NEW_SECRET = process.env.CROSS_APP_SECRET || "uurclTHL375CiZeWi2g4T3GczU2YNY9I1wzjlsVTgSk"
+const OLD_SECRET = "z-ecosystem-admin-2026"
+const VALID_SECRETS = [NEW_SECRET, OLD_SECRET]
+
+function checkAuth(req: NextRequest) {
+  const auth = req.headers.get("authorization");
+  const token = auth?.replace("Bearer ", "")
+  return token ? VALID_SECRETS.includes(token) : false
+}
 
 // Z One pakai nama plan generik (starter/pro/enterprise), Z-Resto pakai nama
 // sendiri (TRIAL/MONTHLY/YEARLY) — petakan dua arah biar UI /manage tetap bisa
@@ -22,11 +31,6 @@ const PLAN_TO_GENERIC: Record<string, string> = {
   MONTHLY: "pro",
   YEARLY: "enterprise",
 };
-
-function checkAuth(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${CROSS_APP_SECRET}`;
-}
 
 async function buildCrossAppData() {
   const tenants = await prisma.tenant.findMany({
