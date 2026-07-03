@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import "./globals.css"
+import "bootstrap-icons/font/bootstrap-icons.css";
 import ServiceWorkerRegister from "./_components/ServiceWorkerRegister";
 import PWAInstallPrompt from "./_components/PWAInstallPrompt";
 
