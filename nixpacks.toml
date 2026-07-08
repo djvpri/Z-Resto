@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.build]
-cmds = ["npm ci", "npm run build"]
+cmds = ["npm install --legacy-peer-deps", "DATABASE_URL='postgresql://dummy:dummy@localhost/dummy' npx prisma generate", "npm run build"]
 
 [start]
 cmd = "npm start"
