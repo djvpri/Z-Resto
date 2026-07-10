@@ -105,9 +105,8 @@ export async function seedDataDemo(tenantId: string) {
   await prisma.diningTable.createMany({
     data: Array.from({ length: 8 }, (_, i) => ({
       branchId: branch.id,
-      name: `Meja ${i + 1}`,
+      number: `${i + 1}`,
       capacity: i < 4 ? 2 : 4,
-      status: 'AVAILABLE',
     }))
   })
 
