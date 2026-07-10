@@ -17,6 +17,7 @@ model Tenant {
   slug          String   @unique
   logoUrl       String?
   isActive      Boolean  @default(true)
+  isDemo        Boolean  @default(false)
   taxRate       Int      @default(10)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
