@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { bersihkanDataTenant, seedDataDemo } from '@/lib/demo-seed'
 
 export const runtime = 'nodejs'
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const auth = req.headers.get('authorization') || ''
   const token = auth.replace('Bearer ', '').trim()
   const secret = process.env.DEMO_RESET_SECRET
