@@ -11,16 +11,16 @@ type User = {
 };
 
 const NAV = [
-  { href: "/pos", label: "POS Kasir", emoji: "🛒", roles: ["OWNER", "MANAGER", "CASHIER"] },
-  { href: "/orders", label: "Riwayat Order", emoji: "📋", roles: ["OWNER", "MANAGER", "CASHIER"] },
-  { href: "/shift", label: "Shift Kasir", emoji: "🕐", roles: ["OWNER", "MANAGER", "CASHIER"] },
-  { href: "/menu", label: "Kelola Menu", emoji: "🍽️", roles: ["OWNER", "MANAGER"] },
-  { href: "/reports", label: "Laporan", emoji: "📊", roles: ["OWNER", "MANAGER"] },
-  { href: "/staff", label: "Kelola Staf", emoji: "👥", roles: ["OWNER"] },
-  { href: "/overview", label: "HQ Dashboard", emoji: "🏢", roles: ["OWNER"] },
-  { href: "/branches", label: "Kelola Cabang", emoji: "🏬", roles: ["OWNER"] },
-  { href: "/settings", label: "Pengaturan", emoji: "⚙️", roles: ["OWNER"] },
-  { href: "/subscription", label: "Langganan", emoji: "💳", roles: ["OWNER"] },
+  { href: "/pos",          label: "POS Kasir",     icon: "bi-cart3",          roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/orders",       label: "Riwayat Order", icon: "bi-receipt",        roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/shift",        label: "Shift Kasir",   icon: "bi-clock",          roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/menu",         label: "Kelola Menu",   icon: "bi-grid",           roles: ["OWNER", "MANAGER"] },
+  { href: "/reports",      label: "Laporan",       icon: "bi-bar-chart-line", roles: ["OWNER", "MANAGER"] },
+  { href: "/staff",        label: "Kelola Staf",   icon: "bi-people",         roles: ["OWNER"] },
+  { href: "/overview",     label: "HQ Dashboard",  icon: "bi-building",       roles: ["OWNER"] },
+  { href: "/branches",     label: "Kelola Cabang", icon: "bi-shop",           roles: ["OWNER"] },
+  { href: "/settings",     label: "Pengaturan",    icon: "bi-gear",           roles: ["OWNER"] },
+  { href: "/subscription", label: "Langganan",     icon: "bi-credit-card",    roles: ["OWNER"] },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -32,15 +32,18 @@ const ROLE_LABEL: Record<string, string> = {
 export default function DashboardShell({
   user,
   children,
+  isDemo,
   subscriptionBanner,
 }: {
   user: User;
   children: React.ReactNode;
+  isDemo?: boolean;
   subscriptionBanner?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const navItems = NAV.filter((n) => n.roles.includes(user.role));
 
@@ -53,6 +56,16 @@ export default function DashboardShell({
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  async function handleResetDemo() {
+    setResetting(true);
+    try {
+      await fetch("/api/demo/reset", { method: "POST" });
+      router.refresh();
+    } finally {
+      setResetting(false);
+    }
   }
 
   return (
@@ -74,7 +87,7 @@ export default function DashboardShell({
         {/* Logo */}
         <div className="px-4 py-5 border-b border-gray-700/60 flex items-center justify-between">
           <div>
-            <div className="text-base font-bold text-white">🍽️ Z Resto</div>
+            <div className="text-base font-bold text-white flex items-center gap-1.5"><i className="bi bi-egg-fried text-emerald-400" /> Z Resto</div>
             <div className="text-xs text-gray-400 mt-0.5 truncate">
               {user.branch?.name || "Kantor Pusat"}
             </div>
@@ -83,7 +96,7 @@ export default function DashboardShell({
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-400 hover:text-white p-1"
           >
-            ✕
+            <i className="bi bi-x text-lg" />
           </button>
         </div>
 
@@ -101,7 +114,7 @@ export default function DashboardShell({
                     : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
               >
-                <span className="text-base">{item.emoji}</span>
+                <i className={`bi ${item.icon} text-base`} />
                 {item.label}
               </Link>
             );
@@ -135,8 +148,26 @@ export default function DashboardShell({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="text-base font-bold text-gray-800">🍽️ Z Resto</div>
+          <div className="text-base font-bold text-gray-800 flex items-center gap-1.5"><i className="bi bi-egg-fried text-emerald-600" /> Z Resto</div>
         </div>
+
+        {/* Demo banner */}
+        {isDemo && (
+          <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2.5 flex items-center justify-between shrink-0">
+            <span className="text-sm text-emerald-700 flex items-center gap-2">
+              <i className="bi bi-info-circle shrink-0" />
+              Ini adalah akun demo. Data direset otomatis setiap hari.
+            </span>
+            <button
+              onClick={handleResetDemo}
+              disabled={resetting}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-lg px-3 py-1.5 hover:bg-emerald-50 disabled:opacity-50 transition-colors shrink-0 ml-3"
+            >
+              <i className="bi bi-arrow-counterclockwise" />
+              {resetting ? "Mereset..." : "Reset Demo"}
+            </button>
+          </div>
+        )}
 
         {/* Subscription banner */}
         {subscriptionBanner && (

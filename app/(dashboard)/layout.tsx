@@ -49,11 +49,15 @@ export default async function DashboardLayout({
   const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } });
   if (!tenant?.isActive) redirect("/suspended");
 
-  // Subscription gate (bypass for /subscription page itself)
-  const active = await hasActiveSubscription(user.tenantId);
-  if (!active) redirect("/subscription");
+  // Demo tenants bypass subscription gate
+  if (!tenant?.isDemo) {
+    const active = await hasActiveSubscription(user.tenantId);
+    if (!active) redirect("/subscription");
+  }
 
-  const banner = await getSubscriptionBanner(user.tenantId, user.role);
+  const banner = tenant?.isDemo
+    ? undefined
+    : await getSubscriptionBanner(user.tenantId, user.role);
 
   return (
     <DashboardShell
@@ -65,6 +69,7 @@ export default async function DashboardLayout({
           ? { id: user.branch.id, name: user.branch.name, city: user.branch.city }
           : null,
       }}
+      isDemo={!!tenant?.isDemo}
       subscriptionBanner={banner}
     >
       {children}
