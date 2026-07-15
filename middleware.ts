@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   "/api/auth/sso-verify", // endpoint SSO dari Z One
   "/api/register",
   "/api/admin/cross-app",
+  "/api/demo",  // demo endpoints auth via Bearer token sendiri
   "/sso", // halaman landing SSO dari Z One
 ];
 
